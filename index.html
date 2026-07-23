@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+<title>ChantierQuest — DEP 5220 / 5720</title>
+<meta name="description" content="Application de révision gamifiée pour les élèves du DEP en Charpenterie-menuiserie." />
+<meta name="theme-color" content="#8A6516" />
+
+<!-- Ce qui fait d'une page web une application installable -->
+<link rel="manifest" href="manifest.json" />
+<link rel="icon" href="icons/icon-192.png" />
+<link rel="apple-touch-icon" href="icons/icon-192.png" />
+<!-- iOS : plein écran, sans barre de navigateur, une fois ajoutée à l'écran d'accueil -->
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="ChantierQuest" />
+
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<div id="app"></div>
+<script src="data.js"></script>
+<script src="app.js"></script>
+<script>
+  // Enregistre le service worker : c'est lui qui rend l'app disponible hors ligne.
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", function () {
+      navigator.serviceWorker.register("sw.js").catch(function (e) {
+        console.warn("Service worker non enregistré:", e);
+      });
+    });
+  }
+</script>
+</body>
+</html>
