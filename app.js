@@ -38,6 +38,8 @@ function defaultState() {
     welcomeSeen: false, // écran d'explication du fonctionnement, montré une seule fois
     totem: "",          // « Castor Minutieux » — attribué par l'app, jamais saisi
     totemEmoji: "",
+    classCode: "",      // code du centre de formation — rattache à une classe, ne déverrouille rien
+    shared: false,      // l'élève a-t-il accepté de partager sa progression avec l'enseignant ?
     lang: "fr",
     avatarChar: AVATAR_CHARACTERS[0].id,
     avatarColor: "jaune",
@@ -592,6 +594,8 @@ function render() {
   recordLogin();
   if (!state.totem) {
     renderOnboarding();
+  } else if (showClassJoin) {
+    renderClassJoin();
   } else if (currentQuest && currentQuest.__showIntro) {
     renderQuestIntro();
   } else if (currentQuest) {
@@ -611,10 +615,13 @@ function header(activeTab) {
       <span class="avatar-chip">${avatarSVG(state.avatarChar, state.avatarColor, lvl.avatarStage, 42)}</span>
       <div>
         <div class="brand-name">${state.totemEmoji ? state.totemEmoji + " " : ""}${state.totem || ""}</div>
-        <div class="brand-level">${lvlName} · ${state.xp} ${t("xp")}</div>
+        <div class="brand-level">${state.shared && state.classCode
+          ? `👥 ${state.classCode}`
+          : `${lvlName} · ${state.xp} ${t("xp")}`}</div>
       </div>
     </div>
     <div class="topbar-actions">
+      <button class="reset-btn" onclick="goClassJoin()" title="${state.lang==='fr'?'Ma classe':'My class'}">👥</button>
       <button class="lang-btn" onclick="toggleLang()">${t("switchLang")}</button>
       <button class="reset-btn" onclick="resetProgress()" title="${t('resetProgress')}">🔄</button>
     </div>
@@ -756,6 +763,97 @@ function renderOnboarding() {
 function regenTotem() {
   draftTotem = genTotem();
   render();
+}
+
+/* ------------------ Rejoindre ma classe ------------------
+   Le code rattache l'élève à sa cohorte ; il ne déverrouille rien.
+   Le partage est un choix explicite : sans lui, rien n'est transmis. */
+let showClassJoin = false;
+let draftClassCode = "";
+let draftShared = false;
+
+function goClassJoin() {
+  draftClassCode = state.classCode || "";
+  draftShared = state.shared || false;
+  showClassJoin = true;
+  render();
+}
+function closeClassJoin() {
+  showClassJoin = false;
+  render();
+}
+function toggleDraftShare() {
+  draftShared = !draftShared;
+  render();
+}
+function joinClass() {
+  const code = (document.getElementById("classCodeInput").value || draftClassCode).trim().toUpperCase();
+  // Partager sans code n'a pas de sens : on exige le code seulement si l'élève partage.
+  if (draftShared && !code) { draftShared = false; render(); return; }
+  state.classCode = code;
+  state.shared = draftShared && !!code;
+  saveState();
+  if (state.shared) syncProgress();   // première remontée
+  closeClassJoin();
+}
+
+/* Synchronisation vers le serveur de classe.
+   ÉBAUCHE : sera remplacée par l'appel Supabase `soumettre_progression`
+   (voir le schéma de données). Pour l'instant, journalise ce qui partirait. */
+function syncProgress() {
+  if (!state.shared || !state.classCode) return; // sans partage, on ne transmet rien
+  const payload = {
+    classCode: state.classCode,
+    eleveId: deviceId(),
+    totem: state.totem,
+    totemEmoji: state.totemEmoji,
+    xp: state.xp,
+    completed: state.completed
+  };
+  console.log("[synchro — ébauche] à envoyer à Supabase :", payload);
+}
+
+/* Identifiant d'appareil anonyme, stable, généré localement (pas de vrai nom). */
+function deviceId() {
+  let id = localStorage.getItem("chantierquest_device_id");
+  if (!id) {
+    id = "cq-" + (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2));
+    localStorage.setItem("chantierquest_device_id", id);
+  }
+  return id;
+}
+
+function renderClassJoin() {
+  const fr = state.lang === "fr";
+  root.innerHTML = `
+  <div class="onboarding">
+    <div class="lang-toggle-top">
+      <button onclick="closeClassJoin()">${fr ? "← Retour" : "← Back"}</button>
+    </div>
+    <h1>👥 ${fr ? "Ma classe" : "My class"}</h1>
+    <p class="welcome-intro">${fr
+      ? "Ton enseignant t'a remis un code ? Saisis-le pour rejoindre ta classe. L'application fonctionne pareil avec ou sans."
+      : "Got a code from your teacher? Enter it to join your class. The app works the same with or without."}</p>
+
+    <label class="field-label">${fr ? "Code de la classe" : "Class code"}</label>
+    <input id="classCodeInput" type="text" maxlength="20" autocapitalize="characters"
+      placeholder="${fr ? "ex. BONAV-5220" : "e.g. BONAV-5220"}"
+      value="${draftClassCode}" oninput="draftClassCode=this.value"
+      style="text-transform:uppercase;letter-spacing:1px;text-align:center" />
+
+    <div class="share-toggle ${draftShared ? "on" : ""}" onclick="toggleDraftShare()">
+      <div class="tog"></div>
+      <div class="share-lbl">
+        <b>${fr ? "Partager avec mon enseignant" : "Share with my teacher"}</b>
+        <small>${fr ? "Il verra ma progression sous mon totem, sans savoir qui je suis." : "They'll see my progress under my totem, without knowing who I am."}</small>
+      </div>
+    </div>
+    <p class="share-status ${draftShared ? "on" : ""}">${draftShared
+      ? (fr ? "✓ Ta progression sera partagée avec ta classe." : "✓ Your progress will be shared with your class.")
+      : (fr ? "Non partagé : tu révises en solo, rien n'est transmis." : "Not shared: you study solo, nothing is sent.")}</p>
+
+    <button class="cta" onclick="joinClass()">${fr ? "Enregistrer" : "Save"}</button>
+  </div>`;
 }
 
 function selectAvatarChar(id) {
