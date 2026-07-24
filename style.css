@@ -65,6 +65,29 @@ button {
   color: var(--text);
   font-size: 16px;
 }
+.totem-card {
+  background: var(--card);
+  border: 1px solid #3a444c;
+  border-left: 3px solid var(--safety-yellow);
+  border-radius: var(--radius);
+  padding: 18px 16px;
+  text-align: center;
+}
+.totem-emoji { font-size: 42px; line-height: 1; }
+.totem-name { font-family: Georgia, "Times New Roman", serif; font-size: 24px; font-weight: 600; color: var(--text); margin-top: 8px; }
+.totem-name b { color: var(--safety-yellow); font-weight: 600; }
+.totem-hint { font-size: 12px; color: var(--muted); margin-top: 8px; line-height: 1.4; }
+.totem-reroll {
+  margin-top: 12px;
+  width: 100%;
+  background: var(--dark-2);
+  color: var(--text);
+  border: 1px solid #3a444c;
+  border-radius: var(--radius);
+  padding: 13px;
+  font-size: 14px;
+  font-weight: 600;
+}
 .access-gate { justify-content: center; }
 #accessCodeInput {
   padding: 20px 16px;

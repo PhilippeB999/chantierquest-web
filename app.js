@@ -4,12 +4,39 @@
 
 const STORAGE_KEY = "chantierquest_state_v3";
 
+/* ------------------ Totem d'atelier ------------------
+   L'élève ne saisit jamais son vrai nom : l'app lui attribue un totem
+   (animal + qualité), qu'il peut régénérer. Le genre de l'adjectif s'accorde
+   avec celui de l'animal. Le totem reste en français — c'est un surnom. */
+const TOTEM_NOUNS = [
+  ["🦊","Renard","m"],["🦦","Loutre","f"],["🦫","Castor","m"],["🐱","Lynx","m"],
+  ["🦉","Hibou","m"],["🦡","Blaireau","m"],["🫎","Orignal","m"],["🐺","Carcajou","m"],
+  ["🦅","Faucon","m"],["🐿️","Écureuil","m"],["🦆","Huard","m"],["🐦","Pinson","m"],
+  ["🕊️","Chouette","f"],["🐝","Belette","f"],["🦌","Héron","m"],["🐗","Sanglier","m"],
+  ["🦔","Martre","f"],["🦩","Grue","f"],["🐻","Corneille","f"],["🦫","Marmotte","f"]
+];
+const TOTEM_ADJ = [
+  ["Vaillant","Vaillante"],["Rusé","Rusée"],["Débrouillard","Débrouillarde"],
+  ["Malin","Maligne"],["Adroit","Adroite"],["Curieux","Curieuse"],
+  ["Ingénieux","Ingénieuse"],["Tenace","Tenace"],["Habile","Habile"],
+  ["Vif","Vive"],["Futé","Futée"],["Astucieux","Astucieuse"],
+  ["Persévérant","Persévérante"],["Audacieux","Audacieuse"],["Minutieux","Minutieuse"],
+  ["Agile","Agile"],["Bricoleur","Bricoleuse"],["Éveillé","Éveillée"],
+  ["Appliqué","Appliquée"],["Costaud","Costaude"]
+];
+function genTotem() {
+  const n = TOTEM_NOUNS[Math.floor(Math.random() * TOTEM_NOUNS.length)];
+  const a = TOTEM_ADJ[Math.floor(Math.random() * TOTEM_ADJ.length)];
+  return { emoji: n[0], noun: n[1], adj: n[2] === "f" ? a[1] : a[0] };
+}
+
 function defaultState() {
   return {
     firstLaunchDate: Date.now(), // début de l\'essai gratuit de 7 jours sur cet appareil
     accessCode: "",
     welcomeSeen: false, // écran d'explication du fonctionnement, montré une seule fois
-    name: "",
+    totem: "",          // « Castor Minutieux » — attribué par l'app, jamais saisi
+    totemEmoji: "",
     lang: "fr",
     avatarChar: AVATAR_CHARACTERS[0].id,
     avatarColor: "jaune",
@@ -25,7 +52,10 @@ function defaultState() {
 }
 
 let state = loadState();
-let draftName = state.name || "";
+// Totem provisoire de l'écran de profil : repris de l'état s'il existe, sinon tiré au sort.
+let draftTotem = state.totem
+  ? { emoji: state.totemEmoji, noun: state.totem.split(" ")[0], adj: state.totem.split(" ").slice(1).join(" ") }
+  : genTotem();
 let draftAccessCode = "";
 let accessCodeStatus = null; // null | "checking" | "invalid" | "offline" | "not-configured"
 let currentQuest = null;      // compétence (objet COMPETENCIES[i]) en cours
@@ -559,7 +589,7 @@ function render() {
     return;
   }
   recordLogin();
-  if (!state.name) {
+  if (!state.totem) {
     renderOnboarding();
   } else if (currentQuest && currentQuest.__showIntro) {
     renderQuestIntro();
@@ -579,7 +609,7 @@ function header(activeTab) {
     <div class="brand">
       <span class="avatar-chip">${avatarSVG(state.avatarChar, state.avatarColor, lvl.avatarStage, 42)}</span>
       <div>
-        <div class="brand-name">${state.name || ""}</div>
+        <div class="brand-name">${state.totemEmoji ? state.totemEmoji + " " : ""}${state.totem || ""}</div>
         <div class="brand-level">${lvlName} · ${state.xp} ${t("xp")}</div>
       </div>
     </div>
@@ -683,8 +713,13 @@ function renderOnboarding() {
     <p class="tagline">${t("tagline")}</p>
     <p class="program-title">${PROGRAM[state.lang].title} — ${PROGRAM[state.lang].subtitle}</p>
 
-    <label class="field-label">${t("yourName")}</label>
-    <input id="nameInput" type="text" maxlength="20" placeholder="${t('yourName')}" value="${draftName}" oninput="draftName=this.value" />
+    <label class="field-label">${state.lang === 'fr' ? "Ton totem d'atelier" : "Your workshop totem"}</label>
+    <div class="totem-card">
+      <div class="totem-emoji">${draftTotem.emoji}</div>
+      <div class="totem-name">${draftTotem.noun} <b>${draftTotem.adj}</b></div>
+      <div class="totem-hint">${state.lang === 'fr' ? "Ton surnom dans l'application. Personne ne connaît ton vrai nom." : "Your nickname in the app. No one knows your real name."}</div>
+    </div>
+    <button type="button" class="totem-reroll" onclick="regenTotem()">🎲 ${state.lang === 'fr' ? "M'en donner un autre" : "Give me another one"}</button>
 
     <label class="field-label">${t("chooseAvatar")}</label>
     <div class="avatar-char-grid">
@@ -717,6 +752,11 @@ function renderOnboarding() {
   </div>`;
 }
 
+function regenTotem() {
+  draftTotem = genTotem();
+  render();
+}
+
 function selectAvatarChar(id) {
   state.avatarChar = id;
   render();
@@ -737,9 +777,9 @@ function toggleLang() {
 }
 
 function startGame() {
-  const val = (document.getElementById("nameInput").value || draftName).trim();
-  if (!val) return;
-  state.name = val;
+  // Le totem tiré à l'écran de profil se fige ici, au démarrage.
+  state.totem = `${draftTotem.noun} ${draftTotem.adj}`;
+  state.totemEmoji = draftTotem.emoji;
   state.createdAt = state.createdAt || new Date().toISOString();
   saveState();
   render();
@@ -1153,7 +1193,7 @@ function goTrophies() { currentQuest = null; renderTrophies(); }
 function renderLeaderboard() {
   const lvl = getLevel();
   const playerEntry = {
-    name: state.name || t("you"),
+    name: (state.totemEmoji ? state.totemEmoji + " " : "") + (state.totem || t("you")),
     xp: state.xp,
     avatarChar: state.avatarChar,
     avatarColor: state.avatarColor,
@@ -1200,7 +1240,7 @@ function resetProgress() {
     // L'écran d'explication n'a pas besoin de revenir juste parce que l'élève
     // réinitialise son avatar/sa progression.
     state.welcomeSeen = keepWelcomeSeen;
-    draftName = "";
+    draftTotem = genTotem();
     currentQuest = null;
     currentTierLevel = null;
     quizAnswers = [];
