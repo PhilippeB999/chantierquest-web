@@ -797,21 +797,59 @@ function joinClass() {
   closeClassJoin();
 }
 
-/* Synchronisation vers le serveur de classe.
-   ÉBAUCHE : sera remplacée par l'appel Supabase `soumettre_progression`
-   (voir le schéma de données). Pour l'instant, journalise ce qui partirait. */
-function syncProgress() {
-  if (!state.shared || !state.classCode) return; // sans partage, on ne transmet rien
-  const payload = {
-    classCode: state.classCode,
-    eleveId: deviceId(),
-    totem: state.totem,
-    totemEmoji: state.totemEmoji,
-    xp: state.xp,
-    completed: state.completed
-  };
-  console.log("[synchro — ébauche] à envoyer à Supabase :", payload);
+/* Synchronisation vers le serveur de classe (Supabase).
+   Écriture par la fonction `soumettre_progression` — jamais d'accès direct aux
+   tables (RLS). Hors-ligne : la charge reste en file locale et repart au réseau. */
+const SUPABASE_URL = "https://gejmaxobebsamvfkkpoj.supabase.co";
+const SUPABASE_KEY = "sb_publishable_jqf5eYy0Coka5d0-E86JJQ_bCiQDyvD";
+const SYNC_KEY = "chantierquest_sync_pending";
+
+/* Transforme state.completed ({ c01_1: {best}, ... }) en tableau { module, niveau, score }. */
+function buildProgressArray() {
+  const out = [];
+  for (const key in state.completed) {
+    const m = key.match(/^(c\d+)_([123])$/);
+    if (!m) continue;
+    const v = state.completed[key] || {};
+    out.push({ module: m[1], niveau: parseInt(m[2], 10), score: v.best != null ? v.best : (v.score || 0) });
+  }
+  return out;
 }
+
+function syncProgress() {
+  if (!state.shared || !state.classCode) return; // sans partage, rien ne part
+  const payload = {
+    p_code: state.classCode,
+    p_eleve: deviceId(),
+    p_totem: state.totem,
+    p_progress: buildProgressArray()
+  };
+  // On garde la dernière charge : un upsert idempotent, la plus récente prime.
+  localStorage.setItem(SYNC_KEY, JSON.stringify(payload));
+  flushSync();
+}
+
+async function flushSync() {
+  const raw = localStorage.getItem(SYNC_KEY);
+  if (!raw) return;
+  if (!navigator.onLine) return;               // on réessaiera au retour du réseau
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/soumettre_progression`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "apikey": SUPABASE_KEY,
+        "Authorization": "Bearer " + SUPABASE_KEY
+      },
+      body: raw
+    });
+    if (res.ok) localStorage.removeItem(SYNC_KEY);  // succès : on vide la file
+    // sinon on garde la file pour un prochain essai
+  } catch (e) { /* hors ligne / échec réseau : la file reste */ }
+}
+
+// Au retour du réseau, on vide ce qui attendait.
+window.addEventListener("online", flushSync);
 
 /* Identifiant d'appareil anonyme, stable, généré localement (pas de vrai nom). */
 function deviceId() {
@@ -1234,6 +1272,7 @@ function finishQuiz() {
   }
   state.xp += xpGained;
   saveState();
+  syncProgress();   // remonte la progression si l'élève partage avec sa classe
 
   root.innerHTML = header("map") + `
     <div class="content quest-result">
@@ -1372,8 +1411,14 @@ window.goLeaderboard = goLeaderboard;
 window.resetProgress = resetProgress;
 window.submitAccessCode = submitAccessCode;
 window.completeWelcome = completeWelcome;
+window.regenTotem = regenTotem;
+window.goClassJoin = goClassJoin;
+window.closeClassJoin = closeClassJoin;
+window.toggleDraftShare = toggleDraftShare;
+window.joinClass = joinClass;
 
 render();
+flushSync();   // vide une éventuelle file en attente d'un envoi précédent
 
 /* PWA service worker */
 if ("serviceWorker" in navigator) {
