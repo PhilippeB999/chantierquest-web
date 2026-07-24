@@ -8,12 +8,13 @@ const STORAGE_KEY = "chantierquest_state_v3";
    L'élève ne saisit jamais son vrai nom : l'app lui attribue un totem
    (animal + qualité), qu'il peut régénérer. Le genre de l'adjectif s'accorde
    avec celui de l'animal. Le totem reste en français — c'est un surnom. */
+// Chaque emoji montre bien l'animal nommé, et le genre du nom est exact.
 const TOTEM_NOUNS = [
-  ["🦊","Renard","m"],["🦦","Loutre","f"],["🦫","Castor","m"],["🐱","Lynx","m"],
-  ["🦉","Hibou","m"],["🦡","Blaireau","m"],["🫎","Orignal","m"],["🐺","Carcajou","m"],
-  ["🦅","Faucon","m"],["🐿️","Écureuil","m"],["🦆","Huard","m"],["🐦","Pinson","m"],
-  ["🕊️","Chouette","f"],["🐝","Belette","f"],["🦌","Héron","m"],["🐗","Sanglier","m"],
-  ["🦔","Martre","f"],["🦩","Grue","f"],["🐻","Corneille","f"],["🦫","Marmotte","f"]
+  ["🦊","Renard","m"],["🦦","Loutre","f"],["🦫","Castor","m"],["🦉","Hibou","m"],
+  ["🦡","Blaireau","m"],["🐺","Loup","m"],["🦅","Aigle","m"],["🐿️","Écureuil","m"],
+  ["🐗","Sanglier","m"],["🦔","Hérisson","m"],["🐻","Ours","m"],["🦌","Cerf","m"],
+  ["🦆","Canard","m"],["🐇","Lièvre","m"],["🐢","Tortue","f"],["🐸","Grenouille","f"],
+  ["🐝","Abeille","f"],["🐜","Fourmi","f"]
 ];
 const TOTEM_ADJ = [
   ["Vaillant","Vaillante"],["Rusé","Rusée"],["Débrouillard","Débrouillarde"],
