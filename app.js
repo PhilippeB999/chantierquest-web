@@ -8,27 +8,34 @@ const STORAGE_KEY = "chantierquest_state_v3";
    L'élève ne saisit jamais son vrai nom : l'app lui attribue un totem
    (animal + qualité), qu'il peut régénérer. Le genre de l'adjectif s'accorde
    avec celui de l'animal. Le totem reste en français — c'est un surnom. */
-// Chaque emoji montre bien l'animal nommé, et le genre du nom est exact.
+// emoji, nom FR, nom EN, genre. Chaque emoji montre bien l'animal nommé.
 const TOTEM_NOUNS = [
-  ["🦊","Renard","m"],["🦦","Loutre","f"],["🦫","Castor","m"],["🦉","Hibou","m"],
-  ["🦡","Blaireau","m"],["🐺","Loup","m"],["🦅","Aigle","m"],["🐿️","Écureuil","m"],
-  ["🐗","Sanglier","m"],["🦔","Hérisson","m"],["🐻","Ours","m"],["🦌","Cerf","m"],
-  ["🦆","Canard","m"],["🐇","Lièvre","m"],["🐢","Tortue","f"],["🐸","Grenouille","f"],
-  ["🐝","Abeille","f"],["🐜","Fourmi","f"]
+  ["🦊","Renard","Fox","m"],["🦦","Loutre","Otter","f"],["🦫","Castor","Beaver","m"],
+  ["🦉","Hibou","Owl","m"],["🦡","Blaireau","Badger","m"],["🐺","Loup","Wolf","m"],
+  ["🦅","Aigle","Eagle","m"],["🐿️","Écureuil","Squirrel","m"],["🐗","Sanglier","Boar","m"],
+  ["🦔","Hérisson","Hedgehog","m"],["🐻","Ours","Bear","m"],["🦌","Cerf","Stag","m"],
+  ["🦆","Canard","Duck","m"],["🐇","Lièvre","Hare","m"],["🐢","Tortue","Turtle","f"],
+  ["🐸","Grenouille","Frog","f"],["🐝","Abeille","Bee","f"],["🐜","Fourmi","Ant","f"]
 ];
+// adjectif FR masculin, FR féminin, EN
 const TOTEM_ADJ = [
-  ["Vaillant","Vaillante"],["Rusé","Rusée"],["Débrouillard","Débrouillarde"],
-  ["Malin","Maligne"],["Adroit","Adroite"],["Curieux","Curieuse"],
-  ["Ingénieux","Ingénieuse"],["Tenace","Tenace"],["Habile","Habile"],
-  ["Vif","Vive"],["Futé","Futée"],["Astucieux","Astucieuse"],
-  ["Persévérant","Persévérante"],["Audacieux","Audacieuse"],["Minutieux","Minutieuse"],
-  ["Agile","Agile"],["Bricoleur","Bricoleuse"],["Éveillé","Éveillée"],
-  ["Appliqué","Appliquée"],["Costaud","Costaude"]
+  ["Vaillant","Vaillante","Valiant"],["Rusé","Rusée","Cunning"],["Débrouillard","Débrouillarde","Resourceful"],
+  ["Malin","Maligne","Clever"],["Adroit","Adroite","Deft"],["Curieux","Curieuse","Curious"],
+  ["Ingénieux","Ingénieuse","Ingenious"],["Tenace","Tenace","Tenacious"],["Habile","Habile","Skillful"],
+  ["Vif","Vive","Quick"],["Futé","Futée","Sharp"],["Astucieux","Astucieuse","Astute"],
+  ["Persévérant","Persévérante","Persistent"],["Audacieux","Audacieuse","Bold"],["Minutieux","Minutieuse","Meticulous"],
+  ["Agile","Agile","Agile"],["Bricoleur","Bricoleuse","Handy"],["Éveillé","Éveillée","Bright"],
+  ["Appliqué","Appliquée","Diligent"],["Costaud","Costaude","Sturdy"]
 ];
 function genTotem() {
   const n = TOTEM_NOUNS[Math.floor(Math.random() * TOTEM_NOUNS.length)];
   const a = TOTEM_ADJ[Math.floor(Math.random() * TOTEM_ADJ.length)];
-  return { emoji: n[0], noun: n[1], adj: n[2] === "f" ? a[1] : a[0] };
+  return { emoji: n[0], nounFr: n[1], nounEn: n[2], adjFr: n[3] === "f" ? a[1] : a[0], adjEn: a[2] };
+}
+// Rendu du totem selon la langue : FR « Castor Minutieux », EN « Meticulous Beaver ».
+function totemLabel(t, lang) {
+  if (!t || !t.nounFr) return "";
+  return lang === "en" ? `${t.adjEn} ${t.nounEn}` : `${t.nounFr} ${t.adjFr}`;
 }
 
 function defaultState() {
@@ -36,8 +43,7 @@ function defaultState() {
     firstLaunchDate: Date.now(), // début de l\'essai gratuit de 7 jours sur cet appareil
     accessCode: "",
     welcomeSeen: false, // écran d'explication du fonctionnement, montré une seule fois
-    totem: "",          // « Castor Minutieux » — attribué par l'app, jamais saisi
-    totemEmoji: "",
+    totem: null,        // objet { emoji, nounFr, nounEn, adjFr, adjEn } — attribué, jamais saisi
     classCode: "",      // code du centre de formation — rattache à une classe, ne déverrouille rien
     shared: false,      // l'élève a-t-il accepté de partager sa progression avec l'enseignant ?
     lang: "fr",
@@ -56,9 +62,7 @@ function defaultState() {
 
 let state = loadState();
 // Totem provisoire de l'écran de profil : repris de l'état s'il existe, sinon tiré au sort.
-let draftTotem = state.totem
-  ? { emoji: state.totemEmoji, noun: state.totem.split(" ")[0], adj: state.totem.split(" ").slice(1).join(" ") }
-  : genTotem();
+let draftTotem = (state.totem && state.totem.nounFr) ? state.totem : genTotem();
 let draftAccessCode = "";
 let accessCodeStatus = null; // null | "checking" | "invalid" | "offline" | "not-configured"
 let currentQuest = null;      // compétence (objet COMPETENCIES[i]) en cours
@@ -77,6 +81,8 @@ function loadState() {
     if (raw) {
       const parsed = JSON.parse(raw);
       const merged = Object.assign(defaultState(), parsed);
+      // Ancien format : totem stocké en chaîne. On repart du choix de totem.
+      if (typeof merged.totem === "string") merged.totem = null;
       // Les élèves qui avaient déjà un profil avant l'ajout de cet écran
       // n'ont pas à le voir apparaître après une mise à jour de l'app.
       if (parsed.welcomeSeen === undefined && parsed.name) {
@@ -614,7 +620,7 @@ function header(activeTab) {
     <div class="brand">
       <span class="avatar-chip">${avatarSVG(state.avatarChar, state.avatarColor, lvl.avatarStage, 42)}</span>
       <div>
-        <div class="brand-name">${state.totemEmoji ? state.totemEmoji + " " : ""}${state.totem || ""}</div>
+        <div class="brand-name">${state.totem ? state.totem.emoji + " " + totemLabel(state.totem, state.lang) : ""}</div>
         <div class="brand-level">${state.shared && state.classCode
           ? `👥 ${state.classCode}`
           : `${lvlName} · ${state.xp} ${t("xp")}`}</div>
@@ -724,7 +730,9 @@ function renderOnboarding() {
     <label class="field-label">${state.lang === 'fr' ? "Ton totem d'atelier" : "Your workshop totem"}</label>
     <div class="totem-card">
       <div class="totem-emoji">${draftTotem.emoji}</div>
-      <div class="totem-name">${draftTotem.noun} <b>${draftTotem.adj}</b></div>
+      <div class="totem-name">${state.lang === 'en'
+        ? `<b>${draftTotem.adjEn}</b> ${draftTotem.nounEn}`
+        : `${draftTotem.nounFr} <b>${draftTotem.adjFr}</b>`}</div>
       <div class="totem-hint">${state.lang === 'fr' ? "Ton surnom dans l'application. Personne ne connaît ton vrai nom." : "Your nickname in the app. No one knows your real name."}</div>
     </div>
     <button type="button" class="totem-reroll" onclick="regenTotem()">🎲 ${state.lang === 'fr' ? "M'en donner un autre" : "Give me another one"}</button>
@@ -821,7 +829,7 @@ function syncProgress() {
   const payload = {
     p_code: state.classCode,
     p_eleve: deviceId(),
-    p_totem: state.totem,
+    p_totem: totemLabel(state.totem, "fr"),   // canonique FR pour le tableau de bord enseignant
     p_progress: buildProgressArray()
   };
   // On garde la dernière charge : un upsert idempotent, la plus récente prime.
@@ -915,8 +923,7 @@ function toggleLang() {
 
 function startGame() {
   // Le totem tiré à l'écran de profil se fige ici, au démarrage.
-  state.totem = `${draftTotem.noun} ${draftTotem.adj}`;
-  state.totemEmoji = draftTotem.emoji;
+  state.totem = { ...draftTotem };   // fige l'objet totem (neutre en langue)
   state.createdAt = state.createdAt || new Date().toISOString();
   saveState();
   render();
@@ -1331,7 +1338,7 @@ function goTrophies() { currentQuest = null; renderTrophies(); }
 function renderLeaderboard() {
   const lvl = getLevel();
   const playerEntry = {
-    name: (state.totemEmoji ? state.totemEmoji + " " : "") + (state.totem || t("you")),
+    name: state.totem ? (state.totem.emoji + " " + totemLabel(state.totem, state.lang)) : t("you"),
     xp: state.xp,
     avatarChar: state.avatarChar,
     avatarColor: state.avatarColor,
