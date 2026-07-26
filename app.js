@@ -1076,7 +1076,8 @@ function initMatchState(q) {
     defOrder: shuffleArray(idx),
     matched: [],
     selectedTermPos: null,
-    wrong: null
+    wrong: null,
+    errors: 0        // associations fautives : une seule suffit à rater la question
   };
 }
 
@@ -1149,6 +1150,7 @@ function matchSelectDef(pos) {
     }
     render();
   } else {
+    ms.errors++;   // une association fautive : la question ne comptera plus comme réussie
     ms.wrong = { term: ms.selectedTermPos, def: pos };
     render();
     setTimeout(() => {
@@ -1251,7 +1253,8 @@ function finishQuiz() {
   questions.forEach((q, i) => {
     if (q.type === "match") {
       const ms = quizMatchState[i];
-      if (ms && ms.matched.length === q.pairs.length) correct++;
+      // Réussie seulement si toutes les paires sont trouvées SANS erreur.
+      if (ms && ms.matched.length === q.pairs.length && ms.errors === 0) correct++;
     } else {
       const chosen = quizShuffled[i][quizAnswers[i]];
       if (chosen && chosen.correct) correct++;
