@@ -2,7 +2,7 @@
    Au premier chargement, il met en cache tous les fichiers de l'app.
    Ensuite, l'app se lance sans réseau, exactement comme une app native. */
 
-const CACHE = "chantierquest-v7";
+const CACHE = "chantierquest-v8";
 const ASSETS = [
   "index.html",
   "app.js",
@@ -27,14 +27,18 @@ self.addEventListener("activate", (e) => {
   );
 });
 
-// Requêtes : on sert d'abord depuis le cache (donc hors ligne), le réseau en secours.
+// Requêtes : RÉSEAU D'ABORD. En ligne, on sert toujours la version fraîche et on
+// met le cache à jour ; hors ligne seulement, on se rabat sur le cache. Ainsi une
+// mise à jour déployée arrive tout de suite, sans vider le cache à la main.
 self.addEventListener("fetch", (e) => {
   if (e.request.method !== "GET") return;
   e.respondWith(
-    caches.match(e.request).then((hit) => hit || fetch(e.request).then((res) => {
+    fetch(e.request).then((res) => {
       const copy = res.clone();
       caches.open(CACHE).then((c) => c.put(e.request, copy)).catch(() => {});
       return res;
-    }).catch(() => caches.match("index.html")))
+    }).catch(() =>
+      caches.match(e.request).then((hit) => hit || caches.match("index.html"))
+    )
   );
 });
