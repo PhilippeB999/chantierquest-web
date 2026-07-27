@@ -829,7 +829,7 @@ function syncProgress() {
   const payload = {
     p_code: state.classCode,
     p_eleve: deviceId(),
-    p_totem: totemLabel(state.totem, "fr"),   // canonique FR pour le tableau de bord enseignant
+    p_totem: totemLabel(state.totem, state.lang),   // dans la langue de l'élève (FR ou EN)
     p_progress: buildProgressArray()
   };
   // On garde la dernière charge : un upsert idempotent, la plus récente prime.
