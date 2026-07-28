@@ -1244,6 +1244,43 @@ function confettiHTML(count) {
   return `<div class="confetti-burst">${pieces}</div>`;
 }
 
+/* Revue des erreurs : pour chaque question ratée, la réponse donnée, la bonne
+   réponse et l'explication. Transforme le résultat en moment d'apprentissage. */
+function reviewHTML(questions) {
+  const fr = state.lang === "fr";
+  const items = [];
+  questions.forEach((q, i) => {
+    let wrong = false, yours = null, good = null;
+    if (q.type === "match") {
+      const ms = quizMatchState[i];
+      wrong = !(ms && ms.matched.length === q.pairs.length && ms.errors === 0);
+    } else {
+      const choices = quizShuffled[i] || [];
+      const chosen = choices[quizAnswers[i]];
+      const goodChoice = choices.find(ch => ch.correct);
+      wrong = !(chosen && chosen.correct);
+      yours = chosen ? (fr ? chosen.fr : chosen.en) : "—";
+      good = goodChoice ? (fr ? goodChoice.fr : goodChoice.en) : "";
+    }
+    if (!wrong) return;
+    const qText = (fr ? q.fr : q.en) || "";
+    const expl = fr ? q.explFr : q.explEn;
+    items.push(`
+      <div class="review-item">
+        <div class="review-q">${qText}</div>
+        ${yours !== null ? `<div class="review-line yours">✗ ${yours}</div>` : ""}
+        ${good ? `<div class="review-line good">✓ ${good}</div>` : ""}
+        ${expl ? `<div class="review-expl">${expl}</div>` : ""}
+      </div>`);
+  });
+  if (!items.length) return "";
+  return `
+    <div class="review">
+      <h3 class="review-title">${fr ? "Revois tes erreurs" : "Review your mistakes"}</h3>
+      ${items.join("")}
+    </div>`;
+}
+
 function finishQuiz() {
   const c = currentQuest;
   const level = currentTierLevel;
@@ -1293,6 +1330,7 @@ function finishQuiz() {
       <p class="result-xp">+${xpGained} XP</p>
       <p class="${passed ? 'result-pass' : 'result-fail'}">${passed ? t("passed") : t("failed")}</p>
       ${isNewMastery ? `<p class="result-mastery">🏆 ${t("masteryUnlocked")}</p>` : ""}
+      ${reviewHTML(questions)}
       <button class="cta" onclick="goMap()">${t("backToMap")}</button>
     </div>`;
   currentQuest = null;
