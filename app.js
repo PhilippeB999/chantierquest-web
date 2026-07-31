@@ -51,7 +51,8 @@ function defaultState() {
     avatarColor: "jaune",
     vehicle: VEHICLE_TYPES[0].id,
     xp: 0,
-    completed: {},        // { c01_1: { score: 80, best: 80, attempts: 2 }, c01_2: {...}, ... }
+    completed: {},        // { c01_1: { score: 80, best: 80, attempts: 2 }, c01_2: {...}, ... } — PALIERS RÉUSSIS uniquement (déverrouillage, badges)
+    scores: {},           // { c01_1: 25, c01_2: 80, ... } — meilleur score de CHAQUE palier tenté (réussi OU raté) → sert à la synchro (pastille rouge côté enseignant)
     badges: [],           // competency ids earned (palier Avancé réussi = compétence maîtrisée)
     trophies: [],         // trophy ids earned
     loginDays: [],
@@ -89,6 +90,7 @@ function loadState() {
         merged.welcomeSeen = true;
       }
       migrateToTiers(merged);
+      migrateScores(merged);
       return merged;
     }
   } catch (e) { /* ignore */ }
@@ -108,6 +110,21 @@ function migrateToTiers(s) {
   }
   s.completed = migrated;
   s.__migratedTiers = true;
+}
+
+/* Rétrocompatibilité: state.scores (meilleur score de CHAQUE palier tenté, réussi
+   ou raté) a été ajouté après state.completed (paliers réussis seulement). Pour un
+   élève existant, on amorce scores à partir de completed afin qu'il continue de
+   synchroniser ses réussites déjà acquises sans avoir à rejouer. Les échecs,
+   eux, n'existaient pas encore en mémoire : ils se rempliront au prochain quiz. */
+function migrateScores(s) {
+  if (!s.scores || typeof s.scores !== "object") s.scores = {};
+  if (Object.keys(s.scores).length > 0) return;
+  for (const key of Object.keys(s.completed || {})) {
+    const v = s.completed[key] || {};
+    const best = v.best != null ? v.best : (v.score || 0);
+    s.scores[key] = best;
+  }
 }
 
 function saveState() {
@@ -812,14 +829,17 @@ const SUPABASE_URL = "https://gejmaxobebsamvfkkpoj.supabase.co";
 const SUPABASE_KEY = "sb_publishable_jqf5eYy0Coka5d0-E86JJQ_bCiQDyvD";
 const SYNC_KEY = "chantierquest_sync_pending";
 
-/* Transforme state.completed ({ c01_1: {best}, ... }) en tableau { module, niveau, score }. */
+/* Transforme state.scores ({ c01_1: 25, c01_2: 80, ... }) en tableau { module, niveau, score }.
+   On itère state.scores (tous les paliers TENTÉS, réussis OU ratés) et non state.completed
+   (réussis seulement), pour que les échecs (< 70) remontent en pastille rouge côté enseignant.
+   L'id de compétence est libre ; on isole le niveau 1-3 en suffixe. */
 function buildProgressArray() {
   const out = [];
-  for (const key in state.completed) {
-    const m = key.match(/^(c\d+)_([123])$/);
+  for (const key in state.scores) {
+    const m = key.match(/^(.+)_([123])$/);
     if (!m) continue;
-    const v = state.completed[key] || {};
-    out.push({ module: m[1], niveau: parseInt(m[2], 10), score: v.best != null ? v.best : (v.score || 0) });
+    const sc = state.scores[key];
+    out.push({ module: m[1], niveau: parseInt(m[2], 10), score: typeof sc === "number" ? sc : 0 });
   }
   return out;
 }
@@ -1305,6 +1325,11 @@ function finishQuiz() {
 
   const key = tierKey(c.id, level);
   const prevBest = state.completed[key] ? state.completed[key].best : 0;
+  // Magasin de TOUS les essais (réussis ou ratés) : meilleur score par palier tenté.
+  // Alimente la synchro → l'échec apparaît en rouge côté enseignant. Ne touche PAS
+  // à state.completed (réservé aux réussites : déverrouillage, pastilles « fait », badges).
+  state.scores = state.scores || {};
+  state.scores[key] = Math.max(score, state.scores[key] || 0);
   let isNewMastery = false;
   if (passed) {
     state.completed[key] = {
