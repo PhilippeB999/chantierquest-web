@@ -599,3 +599,41 @@ button {
 .review-line.yours { color: #ff6b5e; }
 .review-line.good { color: var(--success); font-weight: 600; }
 .review-expl { font-size: 13px; color: var(--muted); margin-top: 8px; padding-top: 8px; border-top: 1px dashed #3a444c; line-height: 1.5; }
+
+/* ---------- Bandeau CFP (nom du centre rattaché au code de classe) ---------- */
+.cfp-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--card);
+  border-left: 3px solid var(--safety-yellow);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  margin: 14px 0 4px;
+  text-align: left;
+}
+.cfp-banner .cfp-logo {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+  border-radius: 8px;
+  flex: 0 0 auto;
+  background: #fff;
+}
+.cfp-banner .cfp-name {
+  font-weight: 700;
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1.25;
+}
+.cfp-banner .cfp-prog {
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 2px;
+}
+.join-error {
+  color: var(--danger);
+  font-size: 13px;
+  margin: 12px 0 0;
+  text-align: center;
+}

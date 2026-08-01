@@ -46,6 +46,9 @@ function defaultState() {
     totem: null,        // objet { emoji, nounFr, nounEn, adjFr, adjEn } — attribué, jamais saisi
     classCode: "",      // code du centre de formation — rattache à une classe, ne déverrouille rien
     shared: false,      // l'élève a-t-il accepté de partager sa progression avec l'enseignant ?
+    cfpNom: "",         // nom du CFP rattaché au code (rempli par info_classe) — affiché dans l'app
+    cfpLogo: "",        // URL du logo du CFP si présent (nullable) ; sinon on n'affiche que le nom
+    programme: "",      // programme de la classe (info_classe) — informatif
     lang: "fr",
     avatarChar: AVATAR_CHARACTERS[0].id,
     avatarColor: "jaune",
@@ -639,7 +642,7 @@ function header(activeTab) {
       <div>
         <div class="brand-name">${state.totem ? state.totem.emoji + " " + totemLabel(state.totem, state.lang) : ""}</div>
         <div class="brand-level">${state.shared && state.classCode
-          ? `👥 ${state.classCode}`
+          ? `👥 ${state.cfpNom || state.classCode}`
           : `${lvlName} · ${state.xp} ${t("xp")}`}</div>
       </div>
     </div>
@@ -796,10 +799,12 @@ function regenTotem() {
 let showClassJoin = false;
 let draftClassCode = "";
 let draftShared = false;
+let joinStatus = null; // null | "checking" | "invalid" — état de validation du code de classe
 
 function goClassJoin() {
   draftClassCode = state.classCode || "";
   draftShared = state.shared || false;
+  joinStatus = null;
   showClassJoin = true;
   render();
 }
@@ -815,11 +820,75 @@ function joinClass() {
   const code = (document.getElementById("classCodeInput").value || draftClassCode).trim().toUpperCase();
   // Partager sans code n'a pas de sens : on exige le code seulement si l'élève partage.
   if (draftShared && !code) { draftShared = false; render(); return; }
-  state.classCode = code;
-  state.shared = draftShared && !!code;
-  saveState();
-  if (state.shared) syncProgress();   // première remontée
-  closeClassJoin();
+  // Aucun code : on détache proprement (retrait de la classe).
+  if (!code) {
+    state.classCode = ""; state.shared = false;
+    state.cfpNom = ""; state.cfpLogo = ""; state.programme = "";
+    joinStatus = null;
+    saveState();
+    closeClassJoin();
+    return;
+  }
+  // On valide le code auprès du serveur avant de l'accepter (fini le code fantôme).
+  draftClassCode = code;
+  joinStatus = "checking";
+  render();
+  lookupClassInfo(code).then((info) => {
+    if (info === "invalid") { joinStatus = "invalid"; render(); return; }
+    // Valide, OU hors-ligne / échec réseau (info === null) : on accepte de façon optimiste.
+    joinStatus = null;
+    state.classCode = code;
+    state.shared = draftShared && !!code;
+    if (info && typeof info === "object") {
+      state.cfpNom = info.nom || "";
+      state.cfpLogo = info.logo_url || "";
+      state.programme = info.programme || "";
+    }
+    saveState();
+    if (state.shared) syncProgress();   // première remontée
+    closeClassJoin();
+  });
+}
+
+/* Interroge la fonction security-definer info_classe pour un code de classe.
+   Retourne { nom, programme, logo_url } si le code existe, la chaîne "invalid" si
+   le serveur ne connaît pas ce code, ou null en cas d'échec réseau / hors-ligne
+   (dans ce cas l'app accepte le code de façon optimiste et le revalidera plus tard).
+   N'expose aucune donnée d'élève — la fonction ne renvoie que nom + programme + logo. */
+async function lookupClassInfo(code) {
+  if (!navigator.onLine) return null;
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/info_classe`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "apikey": SUPABASE_KEY,
+        "Authorization": "Bearer " + SUPABASE_KEY
+      },
+      body: JSON.stringify({ p_code: code })
+    });
+    if (!res.ok) return null;                    // erreur serveur : on reste optimiste
+    const data = await res.json();
+    const row = Array.isArray(data) ? data[0] : data;
+    if (!row || !row.nom) return "invalid";      // code inconnu / inactif
+    return { nom: row.nom, programme: row.programme || "", logo_url: row.logo_url || "" };
+  } catch (e) {
+    return null;                                 // hors-ligne / échec réseau : optimiste
+  }
+}
+
+/* Récupère le nom du CFP pour un élève déjà rattaché mais dont le state n'a pas encore
+   cfpNom (rattaché avant cette version, ou rejoint hors-ligne). Silencieux si hors-ligne. */
+async function maybeBackfillCfp() {
+  if (!state.classCode || state.cfpNom || !navigator.onLine) return;
+  const info = await lookupClassInfo(state.classCode);
+  if (info && typeof info === "object") {
+    state.cfpNom = info.nom || "";
+    state.cfpLogo = info.logo_url || "";
+    state.programme = info.programme || "";
+    saveState();
+    render();
+  }
 }
 
 /* Synchronisation vers le serveur de classe (Supabase).
@@ -876,8 +945,9 @@ async function flushSync() {
   } catch (e) { /* hors ligne / échec réseau : la file reste */ }
 }
 
-// Au retour du réseau, on vide ce qui attendait.
+// Au retour du réseau, on vide ce qui attendait et on récupère le nom du CFP si besoin.
 window.addEventListener("online", flushSync);
+window.addEventListener("online", maybeBackfillCfp);
 
 /* Identifiant d'appareil anonyme, stable, généré localement (pas de vrai nom). */
 function deviceId() {
@@ -897,6 +967,13 @@ function renderClassJoin() {
       <button onclick="closeClassJoin()">${fr ? "← Retour" : "← Back"}</button>
     </div>
     <h1>👥 ${fr ? "Ma classe" : "My class"}</h1>
+    ${state.cfpNom ? `<div class="cfp-banner">
+      ${state.cfpLogo ? `<img class="cfp-logo" src="${state.cfpLogo}" alt="" />` : ""}
+      <div class="cfp-text">
+        <div class="cfp-name">${state.cfpNom}</div>
+        ${state.programme ? `<div class="cfp-prog">${state.programme}</div>` : ""}
+      </div>
+    </div>` : ""}
     <p class="welcome-intro">${fr
       ? "Ton enseignant t'a remis un code ? Saisis-le pour rejoindre ta classe. L'application fonctionne pareil avec ou sans."
       : "Got a code from your teacher? Enter it to join your class. The app works the same with or without."}</p>
@@ -918,7 +995,9 @@ function renderClassJoin() {
       ? (fr ? "✓ Ta progression sera partagée avec ta classe." : "✓ Your progress will be shared with your class.")
       : (fr ? "Non partagé : tu révises en solo, rien n'est transmis." : "Not shared: you study solo, nothing is sent.")}</p>
 
-    <button class="cta" onclick="joinClass()">${fr ? "Enregistrer" : "Save"}</button>
+    ${joinStatus === "invalid" ? `<p class="join-error">${fr ? "⚠️ Code invalide ou inactif. Vérifie auprès de ton enseignant." : "⚠️ Invalid or inactive code. Check with your teacher."}</p>` : ""}
+
+    <button class="cta" onclick="joinClass()" ${joinStatus === "checking" ? "disabled" : ""}>${joinStatus === "checking" ? (fr ? "Vérification…" : "Checking…") : (fr ? "Enregistrer" : "Save")}</button>
   </div>`;
 }
 
@@ -1492,6 +1571,7 @@ window.joinClass = joinClass;
 
 render();
 flushSync();   // vide une éventuelle file en attente d'un envoi précédent
+maybeBackfillCfp();   // récupère le nom du CFP si l'élève est déjà rattaché sans nom
 
 /* PWA service worker */
 if ("serviceWorker" in navigator) {
