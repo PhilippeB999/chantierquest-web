@@ -1569,9 +1569,39 @@ window.closeClassJoin = closeClassJoin;
 window.toggleDraftShare = toggleDraftShare;
 window.joinClass = joinClass;
 
+/* ------------------ Code de classe dans l'URL (?code=) ------------------
+   Un lien du type .../?code=DEMO-5220 rattache l'élève à sa cohorte
+   automatiquement : validation + personnalisation via info_classe (cfpNom,
+   cfpLogo, programme), sans qu'il ait à chercher l'icône « Ma classe ».
+   IMPORTANT : on n'active PAS le partage (state.shared reste à sa valeur).
+   Le partage demeure un choix explicite (Loi 25) et cela évite qu'une partie
+   de prospect pollue les données du tableau de bord démo. On nettoie l'URL
+   pour ne pas ré-appliquer en boucle au rafraîchissement. */
+function applyUrlCode() {
+  let code = "";
+  try { code = (new URLSearchParams(location.search).get("code") || "").trim().toUpperCase(); } catch (e) { return; }
+  if (!code) return;
+  // On retire ?code= tout de suite (URL propre, pas de ré-application au refresh).
+  try { history.replaceState(null, "", location.pathname + location.hash); } catch (e) { /* ignore */ }
+  lookupClassInfo(code).then((info) => {
+    if (info === "invalid") return;   // code invalide dans le lien : on ignore proprement
+    // Valide, OU hors-ligne / échec réseau (info === null) : rattachement optimiste.
+    state.classCode = code;
+    // On NE touche PAS à state.shared — le partage reste un choix explicite de l'élève.
+    if (info && typeof info === "object") {
+      state.cfpNom = info.nom || "";
+      state.cfpLogo = info.logo_url || "";
+      state.programme = info.programme || "";
+    }
+    saveState();
+    render();
+  });
+}
+
 render();
 flushSync();   // vide une éventuelle file en attente d'un envoi précédent
 maybeBackfillCfp();   // récupère le nom du CFP si l'élève est déjà rattaché sans nom
+applyUrlCode();   // rattache l'élève automatiquement si un ?code= est présent dans le lien
 
 /* PWA service worker */
 if ("serviceWorker" in navigator) {
