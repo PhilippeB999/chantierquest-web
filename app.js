@@ -1129,7 +1129,7 @@ function renderQuestIntro() {
       <div class="quest-intro-icon">${c.icon}</div>
       <div class="quest-intro-tier">${tm.icon} ${t("tierLabel")} ${currentTierLevel} — ${tierName}</div>
       <h2>${title}</h2>
-      <p class="quest-code">${c.code} · ${c.hours} ${t("hours")}</p>
+      ${(c.code || c.hours) ? `<p class="quest-code">${[c.code, c.hours ? `${c.hours} ${t("hours")}` : null].filter(Boolean).join(" · ")}</p>` : ""}
       <p>${tier.questions.length} ${t("question").toLowerCase()}s</p>
       ${done ? `<p class="best-score">${t("score")}: ${done.best}%</p>` : ""}
       <button class="cta" onclick="beginQuiz()">${done ? t("retryQuest") : t("startQuest")}</button>
