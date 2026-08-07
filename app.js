@@ -675,6 +675,66 @@ function isAccessGranted() {
   return (Date.now() - state.firstLaunchDate) < TRIAL_DURATION_MS;
 }
 
+/* ------------------ Accès freemium (licence vs gratuit) ------------------
+   Modèle d'affaires : sans licence (essai, démo, URL nue), l'usager accède
+   aux FREE_COMPETENCIES premières compétences (tous les paliers). Les
+   compétences suivantes (ordre > FREE_COMPETENCIES) restent VISIBLES mais
+   verrouillées « premium ». La licence (accessCode === ACCESS_CODE) débloque
+   tout. Ce verrou est INDÉPENDANT de l'essai de 7 jours : il ne dépend que
+   de isLicensed(). */
+const FREE_COMPETENCIES = 3; // nombre de compétences gratuites sans licence (ajustable)
+
+function isLicensed() {
+  return !!(state.accessCode && state.accessCode.trim().toUpperCase() === ACCESS_CODE);
+}
+
+/* true = compétence bloquée faute de licence (visible mais non jouable). */
+function isPremiumLocked(comp) {
+  return !isLicensed() && comp.order > FREE_COMPETENCIES;
+}
+
+/* Appel à l'action bilingue, rendu via state.lang. */
+function premiumLockText() {
+  const T = {
+    fr: {
+      badge: "🔒 Licence requise",
+      title: "Contenu réservé aux centres licenciés",
+      body: `Les ${FREE_COMPETENCIES} premiers modules sont gratuits. Pour débloquer tout le programme, communiquez avec nous pour une licence Quest.`,
+      cta: "Nous écrire",
+      close: "Fermer"
+    },
+    en: {
+      badge: "🔒 License required",
+      title: "Reserved for licensed training centers",
+      body: `The first ${FREE_COMPETENCIES} modules are free. To unlock the full program, contact us for a Quest license.`,
+      cta: "Contact us",
+      close: "Close"
+    }
+  };
+  return T[state.lang] || T.fr;
+}
+
+/* Overlay non bloquant : montre l'appel à l'action sans quitter la carte.
+   Ajouté à <body> (hors #app) pour survivre au prochain render(). */
+function showPremiumLock() {
+  const existing = document.getElementById("premiumLockOverlay");
+  if (existing) existing.remove();
+  const L = premiumLockText();
+  const el = document.createElement("div");
+  el.id = "premiumLockOverlay";
+  el.className = "premium-overlay";
+  el.innerHTML = `
+    <div class="premium-dialog" role="dialog" aria-modal="true">
+      <div class="premium-badge">${L.badge}</div>
+      <h2>${L.title}</h2>
+      <p>${L.body}</p>
+      <a class="cta" href="mailto:philippe.beaubien@gmail.com?subject=Licence%20Quest">${L.cta}</a>
+      <button class="secondary" onclick="document.getElementById('premiumLockOverlay').remove()">${L.close}</button>
+    </div>`;
+  el.addEventListener("click", (ev) => { if (ev.target === el) el.remove(); });
+  document.body.appendChild(el);
+}
+
 function renderAccessGate() {
   const trialOver = state.firstLaunchDate && (Date.now() - state.firstLaunchDate) >= TRIAL_DURATION_MS;
   root.innerHTML = `
@@ -1070,11 +1130,14 @@ function isTierUnlocked(comp, level) {
 
 function questNode(c) {
   const unlocked = isUnlocked(c);
+  const premiumLocked = isPremiumLocked(c);
+  const playable = unlocked && !premiumLocked;
   const title = state.lang === "fr" ? c.title_fr : c.title_en;
   const mastered = state.badges.includes(c.id);
   let cls = "quest-node";
   if (mastered) cls += " done";
-  else if (!unlocked) cls += " locked";
+  else if (!playable) cls += " locked";
+  if (premiumLocked) cls += " premium-locked";
   const tierPills = TIER_META.map(tm => {
     const tierDone = state.completed[tierKey(c.id, tm.level)];
     const tierUnlocked = isTierUnlocked(c, tm.level);
@@ -1088,22 +1151,25 @@ function questNode(c) {
       ${tierDone ? `<span class="tier-pill-score">${tierDone.best}%</span>` : ""}
     </button>`;
   }).join("");
+  const mainClick = premiumLocked ? "showPremiumLock()" : (playable ? `openQuest('${c.id}',1)` : "");
   return `
     <div class="${cls}">
-      <div class="quest-node-main" onclick="${unlocked ? `openQuest('${c.id}',1)` : ''}">
-        <div class="quest-icon">${unlocked ? c.icon : "🔒"}</div>
+      <div class="quest-node-main" onclick="${mainClick}">
+        <div class="quest-icon">${playable ? c.icon : "🔒"}</div>
         <div class="quest-body">
           <div class="quest-num">${c.order}. ${c.code}</div>
           <div class="quest-title">${title}${mastered ? " 🏆" : ""}</div>
-          <div class="quest-meta">${c.hours} ${t("hours")}</div>
+          ${premiumLocked ? `<div class="quest-premium-note">${premiumLockText().badge}</div>` : `<div class="quest-meta">${c.hours} ${t("hours")}</div>`}
         </div>
       </div>
-      ${unlocked ? `<div class="tier-row">${tierPills}</div>` : ""}
+      ${playable ? `<div class="tier-row">${tierPills}</div>` : ""}
     </div>`;
 }
 
 function openQuest(id, level) {
-  currentQuest = COMPETENCIES.find(c => c.id === id);
+  const comp = COMPETENCIES.find(c => c.id === id);
+  if (comp && isPremiumLocked(comp)) { showPremiumLock(); return; }
+  currentQuest = comp;
   currentTierLevel = level || 1;
   currentQuest.__showIntro = true;
   quizAnswers = [];
@@ -1562,6 +1628,7 @@ window.goTrophies = goTrophies;
 window.goLeaderboard = goLeaderboard;
 window.resetProgress = resetProgress;
 window.submitAccessCode = submitAccessCode;
+window.showPremiumLock = showPremiumLock;
 window.completeWelcome = completeWelcome;
 window.regenTotem = regenTotem;
 window.goClassJoin = goClassJoin;

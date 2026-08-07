@@ -337,6 +337,15 @@ button {
 }
 .quest-node.done { border: 1px solid var(--success); }
 .quest-node.locked { opacity: 0.45; }
+.quest-node.premium-locked { opacity: 1; border: 1px dashed var(--muted); }
+.quest-node.premium-locked .quest-node-main { cursor: pointer; }
+.quest-premium-note { font-size: 11px; font-weight: 600; color: var(--muted); margin-top: 2px; }
+.premium-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.55); display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 1000; }
+.premium-dialog { background: var(--card); border-radius: var(--radius); padding: 22px; max-width: 340px; width: 100%; text-align: center; box-shadow: 0 12px 40px rgba(0,0,0,0.35); }
+.premium-dialog h2 { font-size: 17px; margin: 8px 0; }
+.premium-dialog p { font-size: 14px; color: var(--muted); margin-bottom: 16px; }
+.premium-badge { font-size: 12px; font-weight: 700; color: var(--muted); }
+.premium-dialog .cta { display: block; text-decoration: none; margin-bottom: 10px; }
 .quest-node-main { display: flex; align-items: center; gap: 12px; cursor: pointer; }
 .quest-icon { font-size: 26px; width: 36px; text-align: center; }
 .quest-body { flex: 1; }
