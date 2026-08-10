@@ -667,7 +667,7 @@ function progressPct() {
 /* ------------------ Essai gratuit de 7 jours + code d'accès (local) ------------------ */
 
 const TRIAL_DURATION_MS = 7 * 24 * 60 * 60 * 1000; // essai gratuit de 7 jours
-const ACCESS_CODE = "CHANTIER-2026"; // code fourni au centre de formation après achat de la licence
+const ACCESS_CODE = "CHANTIER-2026-MGLG"; // code fourni au centre de formation après achat de la licence
 
 function isAccessGranted() {
   if (state.accessCode && state.accessCode.trim().toUpperCase() === ACCESS_CODE) return true;
