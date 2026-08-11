@@ -2,7 +2,7 @@
    Au premier chargement, il met en cache tous les fichiers de l'app.
    Ensuite, l'app se lance sans réseau, exactement comme une app native. */
 
-const CACHE = "chantierquest-v17";
+const CACHE = "chantierquest-v18";
 const ASSETS = [
   "index.html",
   "app.js",

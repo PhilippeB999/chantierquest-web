@@ -791,6 +791,7 @@ function renderWelcome() {
         </div>`).join("")}
     </div>
     <button class="cta" onclick="completeWelcome()">${t("start")}</button>
+    ${privacyFooter()}
   </div>`;
 }
 
@@ -1091,6 +1092,13 @@ function startGame() {
   render();
 }
 
+/* Loi 25 : lien discret et persistant vers la politique de confidentialité,
+   affiché en pied de page sur la carte et l'écran « Comment ça marche ».
+   Ouvre la politique hébergée sur le site corporatif dans un nouvel onglet. */
+function privacyFooter() {
+  return `<footer class="privacy-footer"><a href="https://productions-imedias.com/confidentialite.html" target="_blank" rel="noopener">${t("privacy")}</a></footer>`;
+}
+
 function renderMap() {
   const newTrophies = checkTrophies();
   const vh = vehicleHeight(state.xp);
@@ -1112,6 +1120,7 @@ function renderMap() {
         ${COMPETENCIES.map((c) => questNode(c)).join("")}
       </div>
     </div>
+    ${privacyFooter()}
     ${newTrophies.length ? trophyToast(newTrophies[0]) : ""}
   `;
 }
