@@ -667,10 +667,13 @@ function progressPct() {
 /* ------------------ Essai gratuit de 7 jours + code d'accès (local) ------------------ */
 
 const TRIAL_DURATION_MS = 7 * 24 * 60 * 60 * 1000; // essai gratuit de 7 jours
-const ACCESS_CODE = "CHANTIER-2026-MGLG"; // code fourni au centre de formation après achat de la licence
+// Liste des codes de licence valides. Le premier est le code « maître » de l'app ;
+// les suivants sont les codes clients (centres ayant acheté une licence).
+const ACCESS_CODES = ["CHANTIER-2026-MGLG", "ESHORE-2026-UNEN"]; // client : Eastern Shore / ESSB
+const ACCESS_CODE = ACCESS_CODES[0]; // code maître (rétrocompatibilité)
 
 function isAccessGranted() {
-  if (state.accessCode && state.accessCode.trim().toUpperCase() === ACCESS_CODE) return true;
+  if (state.accessCode && ACCESS_CODES.includes(state.accessCode.trim().toUpperCase())) return true;
   if (!state.firstLaunchDate) return true; // sécurité : ne jamais bloquer si la date est absente
   return (Date.now() - state.firstLaunchDate) < TRIAL_DURATION_MS;
 }
@@ -685,7 +688,7 @@ function isAccessGranted() {
 const FREE_COMPETENCIES = 3; // nombre de compétences gratuites sans licence (ajustable)
 
 function isLicensed() {
-  return !!(state.accessCode && state.accessCode.trim().toUpperCase() === ACCESS_CODE);
+  return !!(state.accessCode && ACCESS_CODES.includes(state.accessCode.trim().toUpperCase()));
 }
 
 /* true = compétence bloquée faute de licence (visible mais non jouable). */
@@ -756,7 +759,7 @@ function renderAccessGate() {
 function submitAccessCode() {
   const code = (draftAccessCode || "").trim();
   if (!code) return;
-  if (code.toUpperCase() === ACCESS_CODE) {
+  if (ACCESS_CODES.includes(code.toUpperCase())) {
     state.accessCode = code;
     accessCodeStatus = null;
     saveState();
