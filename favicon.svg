@@ -1,10 +1,20 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <defs>
-    <radialGradient id="ball" cx="38%" cy="30%" r="72%">
-      <stop offset="0%" stop-color="#f7b0a4"/>
-      <stop offset="42%" stop-color="#d42a1c"/>
-      <stop offset="100%" stop-color="#8f160c"/>
-    </radialGradient>
-  </defs>
-  <circle cx="32" cy="32" r="29" fill="url(#ball)"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#e08a24"/><stop offset="55%" stop-color="#c06f10"/><stop offset="100%" stop-color="#7a4306"/></linearGradient><linearGradient id="brass" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f4e2a6"/><stop offset="48%" stop-color="#c9a961"/><stop offset="100%" stop-color="#9c7d3f"/></linearGradient>
+    <linearGradient id="steel" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f7f9fb"/><stop offset="100%" stop-color="#c4ccd3"/></linearGradient></defs>
+  <rect width="512" height="512" fill="url(#bg)"/>
+  <rect x="36" y="36" width="440" height="440" rx="60" fill="none" stroke="url(#brass)" stroke-width="13"/>
+  
+  <!-- rebord -->
+  <ellipse cx="256" cy="322" rx="158" ry="34" fill="url(#steel)" stroke="#7a6a48" stroke-width="5"/>
+  <!-- dome -->
+  <path d="M150 322 C 150 224 190 178 256 178 C 322 178 362 224 362 322 Z" fill="url(#steel)" stroke="#7a6a48" stroke-width="5" stroke-linejoin="round"/>
+  <!-- aretes -->
+  <path d="M256 182 V318" stroke="#aab2ba" stroke-width="10"/>
+  <path d="M206 190 C 206 250 206 290 214 318" stroke="#aab2ba" stroke-width="8" fill="none"/>
+  <path d="M306 190 C 306 250 306 290 298 318" stroke="#aab2ba" stroke-width="8" fill="none"/>
+  <!-- bandeau laiton -->
+  <rect x="150" y="308" width="212" height="18" rx="9" fill="url(#brass)"/>
 </svg>
