@@ -135,6 +135,27 @@ function saveState() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
 
+/* Échappe le HTML pour toute valeur affichée qui ne vient pas d'une liste
+   fixe codée en dur (nom/logo/programme de CFP, code de classe) — ces
+   valeurs transitent par Supabase (info_classe) ou l'URL (?code=) et ne
+   doivent jamais être insérées telles quelles dans un template innerHTML. */
+function escapeHtml(str) {
+  return String(str ?? "").replace(/[&<>"']/g, (c) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  }[c]));
+}
+
+/* Le logo de CFP doit en plus être une vraie URL http(s) — sinon on
+   l'ignore plutôt que de risquer un schéma javascript:/data: dans un src. */
+function safeImageUrl(url) {
+  try {
+    const u = new URL(url, location.href);
+    return (u.protocol === "https:" || u.protocol === "http:") ? u.href : "";
+  } catch {
+    return "";
+  }
+}
+
 function t(key) {
   return UI_TEXT[state.lang][key];
 }
@@ -643,7 +664,7 @@ function header(activeTab) {
       <div>
         <div class="brand-name">${state.totem ? state.totem.emoji + " " + totemLabel(state.totem, state.lang) : ""}</div>
         <div class="brand-level">${state.shared && state.classCode
-          ? `👥 ${state.cfpNom || state.classCode}`
+          ? `👥 ${escapeHtml(state.cfpNom || state.classCode)}`
           : `${lvlName} · ${state.xp} ${t("xp")}`}</div>
       </div>
     </div>
@@ -1063,10 +1084,10 @@ function renderClassJoin() {
     </div>
     <h1>👥 ${fr ? "Ma classe" : "My class"}</h1>
     ${state.cfpNom ? `<div class="cfp-banner">
-      ${state.cfpLogo ? `<img class="cfp-logo" src="${state.cfpLogo}" alt="" />` : ""}
+      ${safeImageUrl(state.cfpLogo) ? `<img class="cfp-logo" src="${escapeHtml(safeImageUrl(state.cfpLogo))}" alt="" />` : ""}
       <div class="cfp-text">
-        <div class="cfp-name">${state.cfpNom}</div>
-        ${state.programme ? `<div class="cfp-prog">${state.programme}</div>` : ""}
+        <div class="cfp-name">${escapeHtml(state.cfpNom)}</div>
+        ${state.programme ? `<div class="cfp-prog">${escapeHtml(state.programme)}</div>` : ""}
       </div>
     </div>` : ""}
     <p class="welcome-intro">${fr
@@ -1076,7 +1097,7 @@ function renderClassJoin() {
     <label class="field-label">${fr ? "Code de la classe" : "Class code"}</label>
     <input id="classCodeInput" type="text" maxlength="20" autocapitalize="characters"
       placeholder="${fr ? "ex. BONAV-5220" : "e.g. BONAV-5220"}"
-      value="${draftClassCode}" oninput="draftClassCode=this.value"
+      value="${escapeHtml(draftClassCode)}" oninput="draftClassCode=this.value"
       style="text-transform:uppercase;letter-spacing:1px;text-align:center" />
 
     <div class="share-toggle ${draftShared ? "on" : ""}" onclick="toggleDraftShare()">
