@@ -686,16 +686,18 @@ function progressPct() {
   return Math.round((state.badges.length / COMPETENCIES.length) * 100);
 }
 
-/* ------------------ Essai gratuit de 7 jours + code d'accès (local) ------------------ */
+/* ------------------ Essai gratuit de 7 jours + code d'accès (serveur) ------------------
+   Les codes valides ne sont JAMAIS envoyés au navigateur : ils vivent dans une
+   table Supabase protégée par RLS (voir supabase_licences.sql), et l'app ne
+   peut qu'appeler la fonction verifier_licence(code), qui renvoie vrai/faux
+   pour LE code soumis — jamais la liste complète. Une fois qu'un code a été
+   accepté une fois (state.accessCode non vide), l'appareil reste licencié
+   hors ligne sans revalider à chaque lancement (comme le code de classe). */
 
 const TRIAL_DURATION_MS = 7 * 24 * 60 * 60 * 1000; // essai gratuit de 7 jours
-// Liste des codes de licence valides. Le premier est le code « maître » de l'app ;
-// les suivants sont les codes clients (centres ayant acheté une licence).
-const ACCESS_CODES = ["CHANTIER-2026-MGLG", "ESHORE-2026-UNEN"]; // client : Eastern Shore / ESSB
-const ACCESS_CODE = ACCESS_CODES[0]; // code maître (rétrocompatibilité)
 
 function isAccessGranted() {
-  if (state.accessCode && ACCESS_CODES.includes(state.accessCode.trim().toUpperCase())) return true;
+  if (state.accessCode) return true;
   if (!state.firstLaunchDate) return true; // sécurité : ne jamais bloquer si la date est absente
   return (Date.now() - state.firstLaunchDate) < TRIAL_DURATION_MS;
 }
@@ -704,13 +706,41 @@ function isAccessGranted() {
    Modèle d'affaires : sans licence (essai, démo, URL nue), l'usager accède
    aux FREE_COMPETENCIES premières compétences (tous les paliers). Les
    compétences suivantes (ordre > FREE_COMPETENCIES) restent VISIBLES mais
-   verrouillées « premium ». La licence (accessCode === ACCESS_CODE) débloque
-   tout. Ce verrou est INDÉPENDANT de l'essai de 7 jours : il ne dépend que
-   de isLicensed(). */
+   verrouillées « premium ». La licence débloque tout. Ce verrou est
+   INDÉPENDANT de l'essai de 7 jours : il ne dépend que de isLicensed(). */
 const FREE_COMPETENCIES = 3; // nombre de compétences gratuites sans licence (ajustable)
 
 function isLicensed() {
-  return !!(state.accessCode && ACCESS_CODES.includes(state.accessCode.trim().toUpperCase()));
+  return !!state.accessCode;
+}
+
+/* Interroge la fonction security-definer verifier_licence pour un code saisi.
+   Retourne { ok:true } si valide, ou { ok:false, reason } où reason ∈
+   "invalid" (le serveur a répondu : code inconnu/inactif), "offline"
+   (pas de réseau ou erreur serveur — on ne peut pas confirmer, donc on
+   REFUSE plutôt que d'accepter à l'aveugle comme pour le code de classe :
+   contrairement à celui-ci, une licence donne accès à du contenu payant),
+   ou "not-configured" (la fonction n'existe pas encore côté Supabase —
+   signal clair pour Philippe s'il n'a pas encore exécuté supabase_licences.sql). */
+async function verifyLicenseCode(code) {
+  if (!navigator.onLine) return { ok: false, reason: "offline" };
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/verifier_licence`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "apikey": SUPABASE_KEY,
+        "Authorization": "Bearer " + SUPABASE_KEY
+      },
+      body: JSON.stringify({ p_code: code })
+    });
+    if (res.status === 404) return { ok: false, reason: "not-configured" };
+    if (!res.ok) return { ok: false, reason: "offline" };
+    const valid = await res.json();
+    return valid === true ? { ok: true } : { ok: false, reason: "invalid" };
+  } catch (e) {
+    return { ok: false, reason: "offline" };
+  }
 }
 
 /* true = compétence bloquée faute de licence (visible mais non jouable). */
@@ -761,8 +791,8 @@ function showPremiumLock() {
       <input id="premiumCodeInput" class="access-code-input" type="text" autocapitalize="characters" maxlength="30"
         placeholder="${t('accessCodePlaceholder')}" value=""
         oninput="draftPremiumCode=this.value" onkeydown="if(event.key==='Enter')submitPremiumCode()" />
-      <button class="cta" onclick="submitPremiumCode()">${t("accessCodeSubmit")}</button>
-      <p id="premiumCodeError" class="access-error" style="display:none;">${t("accessCodeInvalid")}</p>
+      <button id="premiumCodeSubmitBtn" class="cta" onclick="submitPremiumCode()">${t("accessCodeSubmit")}</button>
+      <p id="premiumCodeError" class="access-error" style="display:none;"></p>
       <p class="premium-or">${L.or}</p>
       <a class="secondary" href="mailto:philippe.beaubien@gmail.com?subject=Licence%20Quest">${L.cta}</a>
       <button class="secondary" onclick="document.getElementById('premiumLockOverlay').remove()">${L.close}</button>
@@ -771,22 +801,33 @@ function showPremiumLock() {
   document.body.appendChild(el);
 }
 
-/* Valide le code saisi dans la pop-up "Licence requise". Succès : mêmes
-   codes que la porte d'accès (ACCESS_CODES) ; débloque tout le programme
-   immédiatement, sans passer par l'écran plein-page. */
-function submitPremiumCode() {
+/* Valide (auprès de Supabase) le code saisi dans la pop-up "Licence requise".
+   Succès : débloque tout le programme immédiatement, sans passer par l'écran
+   plein-page. */
+async function submitPremiumCode() {
   const code = (draftPremiumCode || "").trim();
   if (!code) return;
-  if (ACCESS_CODES.includes(code.toUpperCase())) {
-    state.accessCode = code;
+  const btn = document.getElementById("premiumCodeSubmitBtn");
+  const err = document.getElementById("premiumCodeError");
+  if (err) err.style.display = "none";
+  if (btn) { btn.disabled = true; btn.textContent = t("accessCodeChecking"); }
+  const result = await verifyLicenseCode(code);
+  if (result.ok) {
+    state.accessCode = code.toUpperCase();
     saveState();
     const overlay = document.getElementById("premiumLockOverlay");
     if (overlay) overlay.remove();
     draftPremiumCode = "";
     render();
-  } else {
-    const err = document.getElementById("premiumCodeError");
-    if (err) err.style.display = "block";
+    return;
+  }
+  if (btn) { btn.disabled = false; btn.textContent = t("accessCodeSubmit"); }
+  if (err) {
+    const key = result.reason === "offline" ? "accessCodeOffline"
+      : result.reason === "not-configured" ? "accessCodeNotConfigured"
+      : "accessCodeInvalid";
+    err.textContent = t(key);
+    err.style.display = "block";
   }
 }
 
@@ -801,23 +842,28 @@ function renderAccessGate() {
     <label class="field-label">${t("accessCodeTitle")}</label>
     <p class="tagline">${trialOver ? t("accessCodeTrialOver") : t("accessCodePrompt")}</p>
     <input id="accessCodeInput" class="access-code-input" type="text" autocapitalize="characters" maxlength="30"
-      placeholder="${t('accessCodePlaceholder')}" value="${draftAccessCode}"
+      placeholder="${t('accessCodePlaceholder')}" value="${escapeHtml(draftAccessCode)}"
       oninput="draftAccessCode=this.value" onkeydown="if(event.key==='Enter')submitAccessCode()" />
-    <button class="cta" onclick="submitAccessCode()">${t("accessCodeSubmit")}</button>
-    ${accessCodeStatus === "invalid" ? `<p class="access-error">${t("accessCodeInvalid")}</p>` : ""}
+    <button class="cta" onclick="submitAccessCode()" ${accessCodeStatus === "checking" ? "disabled" : ""}>${accessCodeStatus === "checking" ? t("accessCodeChecking") : t("accessCodeSubmit")}</button>
+    ${accessCodeStatus && accessCodeStatus !== "checking" ? `<p class="access-error">${t({
+      invalid: "accessCodeInvalid", offline: "accessCodeOffline", "not-configured": "accessCodeNotConfigured"
+    }[accessCodeStatus])}</p>` : ""}
   </div>`;
 }
 
-function submitAccessCode() {
+async function submitAccessCode() {
   const code = (draftAccessCode || "").trim();
   if (!code) return;
-  if (ACCESS_CODES.includes(code.toUpperCase())) {
-    state.accessCode = code;
+  accessCodeStatus = "checking";
+  render();
+  const result = await verifyLicenseCode(code);
+  if (result.ok) {
+    state.accessCode = code.toUpperCase();
     accessCodeStatus = null;
     saveState();
     render();
   } else {
-    accessCodeStatus = "invalid";
+    accessCodeStatus = result.reason;
     render();
   }
 }
