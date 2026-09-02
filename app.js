@@ -69,6 +69,7 @@ let state = loadState();
 let draftTotem = (state.totem && state.totem.nounFr) ? state.totem : genTotem();
 let draftAccessCode = "";
 let accessCodeStatus = null; // null | "checking" | "invalid" | "offline" | "not-configured"
+let draftPremiumCode = "";   // saisie du code dans la pop-up "Licence requise" (module verrouillé)
 let currentQuest = null;      // compétence (objet COMPETENCIES[i]) en cours
 let currentTierLevel = null;  // 1, 2 ou 3 — palier de la compétence en cours
 let quizAnswers = [];     // index (dans l'ordre mélangé) choisi par question, ou true pour "match" complété
@@ -702,27 +703,31 @@ function premiumLockText() {
     fr: {
       badge: "🔒 Licence requise",
       title: "Contenu réservé aux centres licenciés",
-      body: `Les ${FREE_COMPETENCIES} premiers modules sont gratuits. Pour débloquer tout le programme, communiquez avec nous pour une licence Quest.`,
-      cta: "Nous écrire",
+      body: `Les ${FREE_COMPETENCIES} premiers modules sont gratuits. Tu as un code d'accès ? Entre-le ci-dessous pour débloquer tout le programme.`,
+      or: "ou",
+      cta: "Nous écrire pour une licence",
       close: "Fermer"
     },
     en: {
       badge: "🔒 License required",
       title: "Reserved for licensed training centers",
-      body: `The first ${FREE_COMPETENCIES} modules are free. To unlock the full program, contact us for a Quest license.`,
-      cta: "Contact us",
+      body: `The first ${FREE_COMPETENCIES} modules are free. Already have an access code? Enter it below to unlock the full program.`,
+      or: "or",
+      cta: "Contact us for a license",
       close: "Close"
     }
   };
   return T[state.lang] || T.fr;
 }
 
-/* Overlay non bloquant : montre l'appel à l'action sans quitter la carte.
-   Ajouté à <body> (hors #app) pour survivre au prochain render(). */
+/* Overlay non bloquant : montre le champ de code (+ solution de repli "nous
+   écrire") sans quitter la carte. Ajouté à <body> (hors #app) pour survivre
+   au prochain render(). */
 function showPremiumLock() {
   const existing = document.getElementById("premiumLockOverlay");
   if (existing) existing.remove();
   const L = premiumLockText();
+  draftPremiumCode = "";
   const el = document.createElement("div");
   el.id = "premiumLockOverlay";
   el.className = "premium-overlay";
@@ -731,11 +736,37 @@ function showPremiumLock() {
       <div class="premium-badge">${L.badge}</div>
       <h2>${L.title}</h2>
       <p>${L.body}</p>
-      <a class="cta" href="mailto:philippe.beaubien@gmail.com?subject=Licence%20Quest">${L.cta}</a>
+      <label class="field-label" style="text-align:center;">${t("accessCodeTitle")}</label>
+      <input id="premiumCodeInput" class="access-code-input" type="text" autocapitalize="characters" maxlength="30"
+        placeholder="${t('accessCodePlaceholder')}" value=""
+        oninput="draftPremiumCode=this.value" onkeydown="if(event.key==='Enter')submitPremiumCode()" />
+      <button class="cta" onclick="submitPremiumCode()">${t("accessCodeSubmit")}</button>
+      <p id="premiumCodeError" class="access-error" style="display:none;">${t("accessCodeInvalid")}</p>
+      <p class="premium-or">${L.or}</p>
+      <a class="secondary" href="mailto:philippe.beaubien@gmail.com?subject=Licence%20Quest">${L.cta}</a>
       <button class="secondary" onclick="document.getElementById('premiumLockOverlay').remove()">${L.close}</button>
     </div>`;
   el.addEventListener("click", (ev) => { if (ev.target === el) el.remove(); });
   document.body.appendChild(el);
+}
+
+/* Valide le code saisi dans la pop-up "Licence requise". Succès : mêmes
+   codes que la porte d'accès (ACCESS_CODES) ; débloque tout le programme
+   immédiatement, sans passer par l'écran plein-page. */
+function submitPremiumCode() {
+  const code = (draftPremiumCode || "").trim();
+  if (!code) return;
+  if (ACCESS_CODES.includes(code.toUpperCase())) {
+    state.accessCode = code;
+    saveState();
+    const overlay = document.getElementById("premiumLockOverlay");
+    if (overlay) overlay.remove();
+    draftPremiumCode = "";
+    render();
+  } else {
+    const err = document.getElementById("premiumCodeError");
+    if (err) err.style.display = "block";
+  }
 }
 
 function renderAccessGate() {
@@ -748,7 +779,7 @@ function renderAccessGate() {
     <h1>🏗️ ${UI_TEXT[state.lang].appName}</h1>
     <label class="field-label">${t("accessCodeTitle")}</label>
     <p class="tagline">${trialOver ? t("accessCodeTrialOver") : t("accessCodePrompt")}</p>
-    <input id="accessCodeInput" type="text" autocapitalize="characters" maxlength="30"
+    <input id="accessCodeInput" class="access-code-input" type="text" autocapitalize="characters" maxlength="30"
       placeholder="${t('accessCodePlaceholder')}" value="${draftAccessCode}"
       oninput="draftAccessCode=this.value" onkeydown="if(event.key==='Enter')submitAccessCode()" />
     <button class="cta" onclick="submitAccessCode()">${t("accessCodeSubmit")}</button>

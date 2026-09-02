@@ -115,7 +115,7 @@ button {
 .share-status { font-size: 12.5px; color: var(--muted); margin-top: 12px; text-align: center; }
 .share-status.on { color: var(--safety-yellow); }
 .access-gate { justify-content: center; }
-#accessCodeInput {
+.access-code-input {
   padding: 20px 16px;
   border-radius: var(--radius);
   border: 2px solid #555;
@@ -130,7 +130,7 @@ button {
   box-sizing: border-box;
   margin-top: 8px;
 }
-#accessCodeInput:focus {
+.access-code-input:focus {
   outline: none;
   border-color: var(--safety-yellow);
 }
@@ -345,7 +345,12 @@ button {
 .premium-dialog h2 { font-size: 17px; margin: 8px 0; }
 .premium-dialog p { font-size: 14px; color: var(--muted); margin-bottom: 16px; }
 .premium-badge { font-size: 12px; font-weight: 700; color: var(--muted); }
+.premium-dialog .field-label { margin-top: 4px; }
+.premium-dialog .access-code-input { font-size: 18px; letter-spacing: 1.5px; padding: 12px 10px; margin-top: 6px; }
+.premium-dialog .access-error { margin-top: 8px; margin-bottom: 0; }
+.premium-dialog .premium-or { font-size: 12px; color: var(--muted); margin: 14px 0 4px; text-transform: uppercase; letter-spacing: 1px; }
 .premium-dialog .cta { display: block; text-decoration: none; margin-bottom: 10px; }
+.premium-dialog .secondary { display: block; text-decoration: none; margin-bottom: 10px; }
 .quest-node-main { display: flex; align-items: center; gap: 12px; cursor: pointer; }
 .quest-icon { font-size: 26px; width: 36px; text-align: center; }
 .quest-body { flex: 1; }
