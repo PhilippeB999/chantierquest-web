@@ -696,6 +696,13 @@ function progressPct() {
 
 const TRIAL_DURATION_MS = 7 * 24 * 60 * 60 * 1000; // essai gratuit de 7 jours
 
+/* Identifiant de CETTE app côté Supabase. Il cadre la portée du code : la
+   fonction verifier_licence ne dit oui que si le code couvre cette app-ci
+   (colonne `apps` de la table licences ; NULL = forfait suite complète).
+   Sans ce paramètre, toutes les apps partageant le même projet Supabase
+   seraient déverrouillées par n'importe quel code valide d'une autre app. */
+const APP_ID = "chantier";
+
 function isAccessGranted() {
   if (state.accessCode) return true;
   if (!state.firstLaunchDate) return true; // sécurité : ne jamais bloquer si la date est absente
@@ -715,7 +722,7 @@ function isLicensed() {
 }
 
 /* Interroge la fonction security-definer verifier_licence pour un code saisi.
-   Retourne { ok:true } si valide, ou { ok:false, reason } où reason ∈
+   Retourne { ok:true } si valide POUR CETTE APP, ou { ok:false, reason } où reason ∈
    "invalid" (le serveur a répondu : code inconnu/inactif), "offline"
    (pas de réseau ou erreur serveur — on ne peut pas confirmer, donc on
    REFUSE plutôt que d'accepter à l'aveugle comme pour le code de classe :
@@ -732,7 +739,7 @@ async function verifyLicenseCode(code) {
         "apikey": SUPABASE_KEY,
         "Authorization": "Bearer " + SUPABASE_KEY
       },
-      body: JSON.stringify({ p_code: code })
+      body: JSON.stringify({ p_code: code, p_app: APP_ID })
     });
     if (res.status === 404) return { ok: false, reason: "not-configured" };
     if (!res.ok) return { ok: false, reason: "offline" };
