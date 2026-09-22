@@ -82,6 +82,7 @@ grant execute on function verifier_licence(text, text) to anon;
 --   chantier · sasi · pab · pediatrie · physio · compta · secretariat
 --   secretariatmedical · coiffure · ebenisterie · electricite · infographie
 --   mecaniqueauto · plomberie · soudage · voyage · charpenterie
+--   perinatalite · santementale
 --
 -- Le ON CONFLICT fait une MISE À JOUR de la portée (et non « do nothing ») :
 -- un code déjà présent en base depuis la première version du script n'avait
@@ -125,7 +126,15 @@ insert into licences (code, label, apps) values
   ('PLOMBERIE-2026-ERD9',   'Licence centre — PlomberieQuest',                  array['plomberie']),
   ('SOUDAGE-2026-CSN4',     'Licence centre — SoudageQuest',                    array['soudage']),
   ('VOYAGE-2026-TRV5',      'Licence centre — VoyageQuest',                     array['voyage']),
-  ('CHARP-2026-8TJD',       'Licence centre — Charpenterie-menuiserie',         array['charpenterie'])
+  ('CHARP-2026-8TJD',       'Licence centre — Charpenterie-menuiserie',         array['charpenterie']),
+
+  -- PérinatalitéQuest (SASI, compétences 27-28)
+  ('PERINAT-2026-JAJR',     'Code maître / interne — PérinatalitéQuest',        array['perinatalite']),
+  ('PERINAT-2026-DEMO',     'Démo — PérinatalitéQuest',                         array['perinatalite']),
+
+  -- SantéMentaleQuest (SASI, compétence 20)
+  ('SANTEMENT-2026-K3PL',   'Code maître / interne — SantéMentaleQuest',        array['santementale']),
+  ('SANTEMENT-2026-DEMO',   'Démo — SantéMentaleQuest',                         array['santementale'])
 on conflict (code) do update
   set apps  = excluded.apps,
       label = coalesce(excluded.label, licences.label);
@@ -159,6 +168,11 @@ select
   verifier_licence('SASI-2026-JMQR',   'pab')       as code_sasi_sur_pab,        -- attendu : false
   verifier_licence('ESHORE-2026-UNEN', 'sasi')      as code_chantier_sur_sasi,   -- attendu : false
   verifier_licence('ENVOL-2026-B2PG',  'pab')       as code_envol_sur_pab;       -- attendu : true
+
+-- (d) Même test pour les 2 nouvelles apps (doit renvoyer true, false) :
+select
+  verifier_licence('PERINAT-2026-DEMO',   'perinatalite')  as demo_perinat_sur_perinat,   -- attendu : true
+  verifier_licence('PERINAT-2026-DEMO',   'santementale')  as demo_perinat_sur_santemen;  -- attendu : false
 
 
 -- ----------------------------------------------------------------------------
