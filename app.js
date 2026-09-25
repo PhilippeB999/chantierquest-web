@@ -662,7 +662,7 @@ function header(activeTab) {
     <div class="brand">
       <span class="avatar-chip">${avatarSVG(state.avatarChar, state.avatarColor, lvl.avatarStage, 42)}</span>
       <div>
-        <div class="brand-name">${state.totem ? state.totem.emoji + " " + totemLabel(state.totem, state.lang) : ""}</div>
+        <div class="brand-name"${state.totem ? ` onclick="showTotemPicker()" style="cursor:pointer;" title="${state.lang==='fr'?'Changer de totem':'Change totem'}"` : ""}>${state.totem ? state.totem.emoji + " " + totemLabel(state.totem, state.lang) : ""}</div>
         <div class="brand-level">${state.shared && state.classCode
           ? `👥 ${escapeHtml(state.cfpNom || state.classCode)}`
           : `${lvlName} · ${state.xp} ${t("xp")}`}</div>
@@ -959,6 +959,53 @@ function renderOnboarding() {
 
 function regenTotem() {
   draftTotem = genTotem();
+  render();
+}
+
+/* ------------------ Changer de totem en cours de parcours ------------------
+   Le totem reste juste une étiquette d'affichage envoyée au tableau de bord
+   (l'identifiant stable de suivi est stocké séparément) : le changer à mi-
+   parcours ne fait perdre ni XP, ni badges, ni l'historique de l'enseignant. */
+function totemPickerHTML() {
+  const fr = state.lang !== "en";
+  return `
+    <div class="premium-dialog" role="dialog" aria-modal="true">
+      <h2>${fr ? "Changer de totem" : "Change your totem"}</h2>
+      <div class="totem-card">
+        <div class="totem-emoji">${draftTotem.emoji}</div>
+        <div class="totem-name">${fr
+          ? `${draftTotem.nounFr} <b>${draftTotem.adjFr}</b>`
+          : `<b>${draftTotem.adjEn}</b> ${draftTotem.nounEn}`}</div>
+      </div>
+      <button type="button" class="totem-reroll" onclick="rerollTotemPicker()">🎲 ${fr ? "M'en donner un autre" : "Give me another one"}</button>
+      <button class="cta" onclick="confirmTotemChange()">${fr ? "Confirmer" : "Confirm"}</button>
+      <button class="secondary" onclick="document.getElementById('totemPickerOverlay').remove()">${fr ? "Annuler" : "Cancel"}</button>
+    </div>`;
+}
+
+function showTotemPicker() {
+  const existing = document.getElementById("totemPickerOverlay");
+  if (existing) existing.remove();
+  draftTotem = state.totem ? { ...state.totem } : genTotem();
+  const el = document.createElement("div");
+  el.id = "totemPickerOverlay";
+  el.className = "premium-overlay";
+  el.innerHTML = totemPickerHTML();
+  el.addEventListener("click", (ev) => { if (ev.target === el) el.remove(); });
+  document.body.appendChild(el);
+}
+
+function rerollTotemPicker() {
+  draftTotem = genTotem();
+  const el = document.getElementById("totemPickerOverlay");
+  if (el) el.innerHTML = totemPickerHTML();
+}
+
+function confirmTotemChange() {
+  state.totem = { ...draftTotem };
+  saveState();
+  const el = document.getElementById("totemPickerOverlay");
+  if (el) el.remove();
   render();
 }
 
@@ -1748,6 +1795,9 @@ window.submitAccessCode = submitAccessCode;
 window.showPremiumLock = showPremiumLock;
 window.completeWelcome = completeWelcome;
 window.regenTotem = regenTotem;
+window.showTotemPicker = showTotemPicker;
+window.rerollTotemPicker = rerollTotemPicker;
+window.confirmTotemChange = confirmTotemChange;
 window.goClassJoin = goClassJoin;
 window.closeClassJoin = closeClassJoin;
 window.toggleDraftShare = toggleDraftShare;
