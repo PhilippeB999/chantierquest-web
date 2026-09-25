@@ -57,11 +57,11 @@
   var DUREE_SAISON_JOURS = 7;
 
   /* Probabilité qu'un thème ACTIF s'affiche réellement pour une visite.
-     0.45 = environ 45 % des visites pendant une fenêtre ; les autres
+     0.75 = environ 75 % des visites pendant une fenêtre ; les autres
      fois, l'app reste dans son état normal. 1 = toujours (comme avant),
      0 = jamais. Le tirage est figé par onglet, et il ne s'applique
      JAMAIS à l'aperçu forcé ?theme=… (démos toujours fiables). */
-  var CHANCE_AFFICHAGE = 0.45;
+  var CHANCE_AFFICHAGE = 0.75;
 
   /* ------------------------------------------------------------
      1) CONFIGURATION — ajouter un thème = ajouter une entrée ici.
