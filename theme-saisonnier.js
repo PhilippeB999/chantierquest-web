@@ -50,11 +50,11 @@
 
   /* Durée, EN JOURS, de la fenêtre de surprise au changement de saison.
      La fenêtre est centrée sur la date pivot du thème (l'équinoxe ou le
-     solstice) : 5 → du pivot -2 jours au pivot +2 jours.
+     solstice) : 7 → du pivot -3 jours au pivot +3 jours (une semaine).
      Monter à 9 ou 11 pour des saisons plus présentes, descendre à 3
      pour les rendre plus rares. (Une saison peut surcharger cette
      valeur avec « jours: N » dans sa periode.) */
-  var DUREE_SAISON_JOURS = 5;
+  var DUREE_SAISON_JOURS = 7;
 
   /* Probabilité qu'un thème ACTIF s'affiche réellement pour une visite.
      0.45 = environ 45 % des visites pendant une fenêtre ; les autres
