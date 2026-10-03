@@ -1175,6 +1175,33 @@ function deviceId() {
   return id;
 }
 
+/* Statistiques d'usage — un lancement par session de navigation.
+   Ecriture seule via la RPC `enregistrer_lancement` (security definer) : aucune
+   donnee personnelle, seulement l'id de l'app et l'identifiant d'appareil
+   anonyme. Garde-fou en sessionStorage : une ouverture reelle = un lancement ;
+   un re-render ou un retour d'onglet ne compte pas, et rouvrir l'app demain
+   recompte. Strictement non bloquant et silencieux : en cas d'echec on laisse
+   tomber ce lancement (aucune file locale — un lancement perdu est sans
+   consequence, contrairement a la progression). */
+const LAUNCH_KEY = "chantierquest_launch_logged";
+
+function enregistrerLancement() {
+  try {
+    if (sessionStorage.getItem(LAUNCH_KEY)) return;   // deja compte pour cette session
+    sessionStorage.setItem(LAUNCH_KEY, "1");
+    if (!navigator.onLine) return;                    // hors ligne : on ne compte pas
+    fetch(`${SUPABASE_URL}/rest/v1/rpc/enregistrer_lancement`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "apikey": SUPABASE_KEY,
+        "Authorization": "Bearer " + SUPABASE_KEY
+      },
+      body: JSON.stringify({ p_app: APP_ID, p_device_id: deviceId() })
+    }).then((r) => r.text(), () => {}).catch(() => {});   // on consomme la reponse (204, vide) pour ne pas laisser un flux pendant ; echec reseau : silencieux, l'eleve ne voit rien
+  } catch (e) { /* sessionStorage indisponible : on ignore */ }
+}
+
 function renderClassJoin() {
   const fr = state.lang === "fr";
   root.innerHTML = `
@@ -1834,6 +1861,7 @@ function applyUrlCode() {
 
 render();
 flushSync();   // vide une éventuelle file en attente d'un envoi précédent
+enregistrerLancement();   // statistiques d'usage : un lancement par session
 maybeBackfillCfp();   // récupère le nom du CFP si l'élève est déjà rattaché sans nom
 applyUrlCode();   // rattache l'élève automatiquement si un ?code= est présent dans le lien
 
