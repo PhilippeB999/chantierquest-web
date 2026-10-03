@@ -73,3 +73,40 @@ select
 from lancements
 group by app
 order by lancements_total desc;
+
+
+-- ----------------------------------------------------------------------------
+-- 5. Statistiques COMPLÈTES — la requête à utiliser au quotidien
+--
+-- Pourquoi celle-ci plutôt que la section 4 : la requête ci-dessus fait un
+-- `group by` sur la table des lancements, donc une app que PERSONNE n'ouvre
+-- n'apparaît pas du tout — ligne absente, et non ligne à zéro. Or c'est
+-- justement l'information la plus utile : savoir quelles apps ne décollent pas.
+--
+-- Celle-ci part de la liste des 19 apps et fait un LEFT JOIN : les apps sans
+-- aucun lancement sortent donc avec des zéros, bien visibles.
+--
+-- Colonnes : `appareils_distincts` compte des PERSONNES (le chiffre à citer
+-- dans une démarche auprès d'un CFP) ; `lancements_total` compte des ouvertures ;
+-- `appareils_30j` distingue une app réellement vivante d'une app qui a eu une
+-- pointe de curiosité puis plus rien.
+--
+-- Si une app est ajoutée ou renommée, ajouter son APP_ID à la liste ci-dessous.
+-- ----------------------------------------------------------------------------
+with apps(app) as (
+  values ('chantier'),('charpenterie'),('coiffure'),('compta'),('ebenisterie'),
+         ('electricite'),('infographie'),('mecaniqueauto'),('pab'),('pediatrie'),
+         ('perinatalite'),('physio'),('plomberie'),('santementale'),('sasi'),
+         ('secretariat'),('secretariatmedical'),('soudage'),('voyage')
+)
+select
+  a.app,
+  count(l.id)                 as lancements_total,
+  count(distinct l.device_id) as appareils_distincts,
+  count(distinct l.device_id)
+    filter (where l.created_at > now() - interval '30 days') as appareils_30j,
+  max(l.created_at)           as dernier_lancement
+from apps a
+left join lancements l on l.app = a.app
+group by a.app
+order by appareils_distincts desc, a.app;
