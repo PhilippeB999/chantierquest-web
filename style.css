@@ -656,3 +656,109 @@ button {
 .privacy-footer{text-align:center;padding:14px 0 22px;}
 .privacy-footer a{font-size:12px;color:var(--muted);text-decoration:none;opacity:.75;letter-spacing:.02em;}
 .privacy-footer a:hover{opacity:1;text-decoration:underline;}
+
+/* ---------- Carnet de stage (module en option — carnet.js) ----------
+   Reprend les jetons de ChantierQuest : fond ardoise, jaune sécurité,
+   cartes var(--card). Aucun style de la maquette n'est importé. */
+.tabs.tabs-5 button { font-size: 10px; padding: 9px 2px; white-space: normal; line-height: 1.15; }
+.tabs.carnet-subtabs { padding-top: 0; }
+.tabs.carnet-subtabs button { font-size: 12px; }
+
+.carnet-head { margin-bottom: 14px; }
+.carnet-head h2 { font-size: 20px; margin: 0; }
+.carnet-head p { font-size: 12.5px; color: var(--muted); margin: 3px 0 0; }
+
+.carnet-card {
+  background: var(--card);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  margin-bottom: 12px;
+}
+.carnet-card h3 { font-size: 14px; margin: 0 0 10px; }
+.carnet-card .cta { margin-top: 14px; width: 100%; }
+.carnet-card .secondary { width: 100%; }
+.carnet-eyebrow { font-size: 10.5px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 700; }
+.carnet-sub { font-size: 12.5px; color: var(--muted); margin-top: 4px; line-height: 1.4; }
+.carnet-sub.ok { color: var(--success); }
+.carnet-sub.refaire { color: #ff8f8f; }
+.carnet-avis { font-size: 13.5px; color: var(--muted); margin: 0 0 10px; line-height: 1.5; }
+.carnet-mineur { font-size: 12px; color: var(--muted); border-left: 3px solid var(--safety-yellow); padding-left: 10px; margin: 12px 0; line-height: 1.45; }
+.carnet-loi25 { font-size: 11.5px; color: var(--muted); margin: 14px 0 0; line-height: 1.5; }
+.carnet-lien { display: inline-block; margin-top: 12px; font-size: 12px; color: var(--muted); }
+.carnet-consent p { font-size: 13.5px; line-height: 1.5; margin: 0 0 8px; }
+
+/* En-tête « Mon stage » (touchable pour modifier) */
+.carnet-stage { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+.carnet-stage-txt { flex: 1; min-width: 0; }
+.carnet-stage-txt b { font-size: 15px; }
+.carnet-modifier { font-size: 11.5px; font-weight: 700; color: var(--safety-yellow); white-space: nowrap; }
+
+/* Compteur de gestes validés */
+.carnet-level { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.carnet-level b { font-size: 22px; font-weight: 700; }
+.carnet-level span { font-size: 12px; color: var(--muted); }
+
+/* Badges de stage */
+.carnet-badges { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px 6px; }
+.carnet-badge { display: grid; justify-items: center; gap: 4px; text-align: center; font-size: 10px; line-height: 1.2; color: var(--muted); }
+.carnet-hex {
+  width: 44px; height: 50px;
+  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+  background: var(--dark-2);
+  display: grid; place-items: center; font-size: 18px;
+}
+.carnet-badge.on { color: var(--text); font-weight: 600; }
+.carnet-badge.on .carnet-hex { background: var(--safety-yellow); }
+
+/* Liste des gestes */
+.carnet-list { display: flex; flex-direction: column; gap: 8px; }
+.carnet-row { background: var(--card); border-radius: 12px; padding: 11px 13px; border: 1px solid transparent; }
+.carnet-row.cliquable { cursor: pointer; border-color: #3a444c; }
+.carnet-row.cliquable:active { border-color: var(--safety-yellow); }
+.carnet-row-main { display: flex; align-items: center; gap: 9px; }
+.carnet-row-icon { font-size: 18px; width: 22px; text-align: center; flex: none; }
+.carnet-row-nom { flex: 1; font-size: 13.5px; font-weight: 600; min-width: 0; }
+.carnet-pill { font-size: 10.5px; font-weight: 700; padding: 3px 9px; border-radius: 99px; white-space: nowrap; flex: none; }
+.carnet-pill.attente { background: var(--dark-2); color: var(--muted); }
+.carnet-pill.validee { background: #1f3325; color: var(--success); }
+.carnet-pill.refaire { background: #3a2020; color: #ff8f8f; }
+.carnet-pill.afaire  { background: transparent; color: var(--safety-yellow); border: 1px dashed var(--safety-yellow); }
+
+/* Formulaire */
+.carnet-input {
+  width: 100%;
+  background: var(--dark-2);
+  color: var(--text);
+  border: 1px solid #444;
+  border-radius: 10px;
+  padding: 12px;
+  font-size: 16px;   /* 16px : évite le zoom automatique d'iOS à la saisie */
+  font-family: inherit;
+}
+.carnet-textarea { min-height: 80px; resize: vertical; }
+.carnet-inline { display: grid; grid-template-columns: 1fr 90px; gap: 8px; }
+.carnet-file { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.carnet-drop {
+  display: grid; place-items: center; gap: 6px;
+  min-height: 140px; padding: 14px;
+  border: 2px dashed #4a545e; border-radius: 12px;
+  background: var(--dark-2); color: var(--muted);
+  text-align: center; font-size: 12.5px; cursor: pointer;
+}
+.carnet-drop b { color: var(--text); font-size: 14px; }
+.carnet-drop-icon { font-size: 30px; }
+.carnet-drop img { max-width: 100%; max-height: 220px; border-radius: 10px; display: block; }
+
+/* Journal d'heures */
+.carnet-log { display: flex; flex-direction: column; }
+.carnet-log-row {
+  display: grid; grid-template-columns: 86px 1fr auto 26px;
+  gap: 8px; align-items: center;
+  padding: 9px 0; border-bottom: 1px solid #3a444c; font-size: 12.5px;
+}
+.carnet-log-row:last-child { border-bottom: none; }
+.carnet-log-date { color: var(--muted); font-variant-numeric: tabular-nums; }
+.carnet-log-engin { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.carnet-log-h { font-weight: 700; color: var(--safety-yellow); font-variant-numeric: tabular-nums; }
+.carnet-log-del { background: none; color: var(--muted); font-size: 14px; padding: 2px 4px; }
+.carnet-log-del:hover { color: var(--danger); }

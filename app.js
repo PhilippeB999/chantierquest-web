@@ -60,7 +60,9 @@ function defaultState() {
     trophies: [],         // trophy ids earned
     loginDays: [],
     matchesCompleted: 0,  // compteur cumulatif de questions d'association réussies
-    createdAt: null
+    createdAt: null,
+    carnetOption: false,  // option « carnet de stage » active pour le centre (cache de option_licence) — voir carnet.js
+    carnet: null          // données du carnet de stage, créées à la demande par carnetState() (carnet.js)
   };
 }
 
@@ -131,8 +133,19 @@ function migrateScores(s) {
   }
 }
 
+/* Renvoie true si la sauvegarde a réussi. Le carnet de stage peut y mettre
+   des photos (~90 ko chacune en base64) : le quota d'environ 5 Mo d'une
+   origine devient atteignable, et une exception non attrapée ici gèlerait
+   l'app en pleine saisie. L'appelant qui s'en soucie (carnetSoumettre)
+   vérifie la valeur de retour ; tous les autres gardent le comportement
+   d'avant, sauf qu'ils ne plantent plus. */
 function saveState() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    return true;
+  } catch (e) {
+    return false;   // quota dépassé ou stockage bloqué (navigation privée stricte)
+  }
 }
 
 /* Échappe le HTML pour toute valeur affichée qui ne vient pas d'une liste
@@ -644,6 +657,9 @@ function render() {
     renderOnboarding();
   } else if (showClassJoin) {
     renderClassJoin();
+  } else if (typeof carnetView !== "undefined" && carnetView && typeof renderCarnet === "function" && carnetDisponible()) {
+    // Module en option (carnet.js) : n'intercepte le rendu que si le centre a l'option.
+    renderCarnet();
   } else if (currentQuest && currentQuest.__showIntro) {
     renderQuestIntro();
   } else if (currentQuest) {
@@ -674,12 +690,24 @@ function header(activeTab) {
       <button class="reset-btn" onclick="resetProgress()" title="${t('resetProgress')}">🔄</button>
     </div>
   </div>
-  <nav class="tabs">
+  <nav class="tabs${carnetDisponible() ? " tabs-5" : ""}">
     <button class="${activeTab==='map'?'active':''}" onclick="goMap()">🗺️ ${t("map")}</button>
     <button class="${activeTab==='badges'?'active':''}" onclick="goBadges()">🎖️ ${t("badges")}</button>
     <button class="${activeTab==='trophies'?'active':''}" onclick="goTrophies()">🏆 ${t("trophies")}</button>
     <button class="${activeTab==='leaderboard'?'active':''}" onclick="goLeaderboard()">📊 ${t("leaderboard")}</button>
+    ${carnetDisponible() ? `<button class="${activeTab==='carnet'?'active':''}" onclick="carnetGo('gestes')">🦺 ${typeof CARNET_NOM !== "undefined" ? CARNET_NOM : "Stage"}</button>` : ""}
   </nav>`;
+}
+
+/* Le carnet de stage (carnet.js) est un module en OPTION : s'il n'est pas
+   chargé, ou si l'option n'est pas au contrat du centre, l'app de révision
+   doit se comporter exactement comme avant. Ces deux gardes assurent que
+   app.js ne dépend jamais de carnet.js. */
+function carnetDisponible() {
+  return typeof window.carnetGo === "function" && !!state.carnetOption && isLicensed();
+}
+function clearCarnetView() {
+  if (typeof carnetView !== "undefined") carnetView = null;
 }
 
 function progressPct() {
@@ -826,6 +854,8 @@ async function submitPremiumCode() {
     if (overlay) overlay.remove();
     draftPremiumCode = "";
     render();
+    // Le code vient peut-être avec l'option « carnet de stage » (module séparé).
+    if (typeof carnetRefreshOption === "function") carnetRefreshOption();
     return;
   }
   if (btn) { btn.disabled = false; btn.textContent = t("accessCodeSubmit"); }
@@ -869,6 +899,8 @@ async function submitAccessCode() {
     accessCodeStatus = null;
     saveState();
     render();
+    // Le code vient peut-être avec l'option « carnet de stage » (module séparé).
+    if (typeof carnetRefreshOption === "function") carnetRefreshOption();
   } else {
     accessCodeStatus = result.reason;
     render();
@@ -1143,6 +1175,10 @@ function syncProgress() {
 }
 
 async function flushSync() {
+  // Même mécanisme pour le carnet de stage : les réalisations créées hors
+  // ligne sur un chantier repartent par ce seul point de sortie (appelé au
+  // lancement, à chaque soumission et sur l'événement "online" ci-dessous).
+  if (typeof carnetFlush === "function") carnetFlush();
   const raw = localStorage.getItem(SYNC_KEY);
   if (!raw) return;
   if (!navigator.onLine) return;               // on réessaiera au retour du réseau
@@ -1698,7 +1734,7 @@ function finishQuiz() {
   currentTierLevel = null;
 }
 
-function goMap() { currentQuest = null; currentTierLevel = null; render(); }
+function goMap() { clearCarnetView(); currentQuest = null; currentTierLevel = null; render(); }
 
 function renderBadges() {
   root.innerHTML = header("badges") + `
@@ -1715,7 +1751,7 @@ function renderBadges() {
       </div>
     </div>`;
 }
-function goBadges() { currentQuest = null; renderBadges(); }
+function goBadges() { clearCarnetView(); currentQuest = null; renderBadges(); }
 
 function renderTrophies() {
   root.innerHTML = header("trophies") + `
@@ -1735,7 +1771,7 @@ function renderTrophies() {
       <button class="secondary danger" onclick="resetProgress()">${t("resetProgress")}</button>
     </div>`;
 }
-function goTrophies() { currentQuest = null; renderTrophies(); }
+function goTrophies() { clearCarnetView(); currentQuest = null; renderTrophies(); }
 
 function renderLeaderboard() {
   const lvl = getLevel();
@@ -1767,7 +1803,7 @@ function renderLeaderboard() {
       <p class="leaderboard-note">${t("leaderboardNote")}</p>
     </div>`;
 }
-function goLeaderboard() { currentQuest = null; renderLeaderboard(); }
+function goLeaderboard() { clearCarnetView(); currentQuest = null; renderLeaderboard(); }
 
 function trophyToast(tr) {
   const name = state.lang === "fr" ? tr.name_fr : tr.name_en;
@@ -1779,7 +1815,16 @@ function resetProgress() {
     const keepFirstLaunchDate = state.firstLaunchDate;
     const keepAccessCode = state.accessCode;
     const keepWelcomeSeen = state.welcomeSeen;
+    // Le carnet de stage n'est PAS une progression de jeu : c'est le dossier de
+    // stage de l'élève, et il peut contenir des réalisations encore en file
+    // (avec leur photo) qui n'ont pas atteint l'enseignant. Réinitialiser son
+    // avatar ne doit pas les détruire en silence. Même raisonnement que pour le
+    // code d'accès juste en dessous.
+    const keepCarnet = state.carnet;
+    const keepCarnetOption = state.carnetOption;
     state = defaultState();
+    state.carnet = keepCarnet;
+    state.carnetOption = keepCarnetOption;
     // Le code d'accès autorise l'appareil, ce n'est pas une "progression de jeu" —
     // on ne force pas l'élève à le ressaisir juste parce qu'il réinitialise son avatar.
     state.firstLaunchDate = keepFirstLaunchDate;
@@ -1860,10 +1905,19 @@ function applyUrlCode() {
 }
 
 render();
-flushSync();   // vide une éventuelle file en attente d'un envoi précédent
+flushSync();   // vide une éventuelle file en attente d'un envoi précédent (progression + carnet)
 enregistrerLancement();   // statistiques d'usage : un lancement par session
 maybeBackfillCfp();   // récupère le nom du CFP si l'élève est déjà rattaché sans nom
 applyUrlCode();   // rattache l'élève automatiquement si un ?code= est présent dans le lien
+
+/* Carnet de stage (module en option) — tout est no-op si carnet.js n'est pas
+   chargé ou si le centre n'a pas l'option au contrat. */
+if (typeof carnetRefreshOption === "function") {
+  carnetRefreshOption();    // l'option est-elle (toujours) active pour ce code de licence ?
+  carnetSyncStatuts();      // redescend les décisions du maître de stage
+  window.addEventListener("online", carnetRefreshOption);
+  window.addEventListener("online", carnetSyncStatuts);
+}
 
 /* PWA service worker */
 if ("serviceWorker" in navigator) {
