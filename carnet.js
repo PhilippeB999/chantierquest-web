@@ -15,7 +15,8 @@
    LE PARCOURS
    ------------------------------------------------------------------
    1. L'élève en stage photographie un geste du métier, choisit le
-      geste et l'engin, ajoute une note, et envoie.
+      geste et l'engin — ou les ÉCRIT lui-même si aucune entrée des
+      listes ne décrit son cas —, ajoute une note, et envoie.
    2. La réalisation arrive sur le tableau de bord de son enseignant,
       avec la photo.
    3. L'enseignant écrit « Validé », ou renvoie « À refaire » avec un
@@ -89,6 +90,42 @@ const CARNET_ENGINS = [
   { fr: "Rouleau compacteur",   en: "Compaction roller" }
 ];
 
+/* ------------------------------------------------------------------
+   TEXTE LIBRE — « Autre : je l'écris moi-même »
+
+   Les 8 gestes ci-dessus sont une liste de démonstration, et aucune
+   liste d'engins ne couvrira tous les chantiers. Un élève qui ne
+   trouve pas son cas doit pouvoir le DÉCRIRE : la liste déroulante
+   reste le chemin rapide (et la seule donnée vraiment agrégeable),
+   mais chacun des trois choix se termine par « Autre ».
+
+   · Geste libre  → `geste_id = 'autre'` + le texte dans `geste_nom`,
+     la colonne « libellé figé au moment de la saisie ». Le schéma
+     n'a PAS à changer.
+   · Engin libre  → la colonne `engin` est déjà du texte libre.
+   · Engin principal du journal d'heures → reste SUR L'APPAREIL
+     (seul le total part), donc aucun échappement serveur à prévoir.
+
+   Sentinelle du <select> : `__autre__` ne peut pas collisionner avec
+   un nom d'engin de la liste, et n'est jamais écrite en base.
+
+   ⚠️ La clé d'upsert de la base est (app, appareil_id, ref), et `ref`
+   est un UUID tiré PAR RÉALISATION (voir carnetRef()) — elle ne dérive
+   pas de `geste_id`. Deux gestes « autre » différents ne peuvent donc
+   pas s'écraser l'un l'autre. C'est la raison pour laquelle le texte
+   libre tient sans toucher au schéma : ne jamais dériver `ref` d'un
+   identifiant de geste.
+   ------------------------------------------------------------------ */
+const CARNET_GESTE_AUTRE = "autre";     // valeur écrite dans geste_id
+const CARNET_AUTRE = "__autre__";       // sentinelle d'interface (engins)
+
+/* Plafonds de saisie. Un geste et un engin se décrivent en quelques
+   mots. Volontairement SOUS les plafonds du serveur (geste_nom tronqué
+   à 120, engin à 60 par carnet_soumettre) : l'app refuse avant que la
+   base n'ait à tronquer, donc l'élève voit exactement ce qui part. */
+const CARNET_GESTE_LIBRE_MAX = 80;
+const CARNET_ENGIN_LIBRE_MAX = 40;
+
 /* Objectif d'heures par défaut — informatif, modifiable par l'élève.
    ⚠️ 150 h vient de la maquette : ce n'est PAS une exigence du DEP 5220. */
 const CARNET_OBJECTIF_DEFAUT = 150;
@@ -137,6 +174,18 @@ const CARNET_T = {
     photoChanger: "Touche pour changer la photo",
     photoRetirer: "Retirer la photo",
     geste: "Geste du métier", engin: "Engin utilisé",
+    autreOption: "Autre — je l'écris moi-même",
+    gesteLibre: "Écris le geste que tu as fait",
+    gesteLibrePH: "Ex. : poser une conduite de drainage",
+    enginLibre: "Écris l'engin que tu as utilisé",
+    enginLibrePH: "Ex. : mini-pelle compacte",
+    libreSansBadge: "Un geste que tu écris toi-même part à ton enseignant et il peut le valider, mais il ne débloque pas de badge.",
+    mesGestesLibres: "Mes gestes écrits à la main",
+    libresSansBadge: `Ton enseignant les valide comme les autres, mais ils ne font pas partie des ${CARNET_GESTES.length} badges.`,
+    gesteLibreVide: "Geste sans nom",
+    erreurGesteLibre: "Écris le geste que tu as fait avant d'envoyer.",
+    erreurEnginLibre: "Écris l'engin que tu as utilisé avant d'envoyer.",
+    erreurEnginJournal: "Écris l'engin principal de ta journée.",
     note: "Note pour ton enseignant (facultatif)",
     notePlaceholder: "Ex. : terrain nivelé pour la dalle du garage",
     envoyer: "Envoyer à mon enseignant",
@@ -174,7 +223,9 @@ const CARNET_T = {
     erreurPhotoGrosse: "Cette photo est trop lourde même après compression. Essaie une autre photo.",
     erreurHeures: "Entre une date et un nombre d'heures entre 0,5 et 14.",
     erreurStockage: "La mémoire de ton téléphone est pleine. Attends d'avoir du réseau pour envoyer ce qui est en file, puis réessaie.",
-    supprimer: "Supprimer"
+    supprimer: "Supprimer",
+    flashValidee: "Ton enseignant vient de valider :",
+    flashRefaire: "Ton enseignant te demande de refaire :"
   },
   en: {
     titre: CARNET_NOM,
@@ -192,6 +243,18 @@ const CARNET_T = {
     photoChanger: "Tap to change the photo",
     photoRetirer: "Remove photo",
     geste: "Trade task", engin: "Machine used",
+    autreOption: "Other — I'll write it myself",
+    gesteLibre: "Write the task you did",
+    gesteLibrePH: "E.g. lay a drainage pipe",
+    enginLibre: "Write the machine you used",
+    enginLibrePH: "E.g. compact mini excavator",
+    libreSansBadge: "A task you write yourself goes to your teacher and can be signed off, but it does not unlock a badge.",
+    mesGestesLibres: "My own written tasks",
+    libresSansBadge: `Your teacher signs them off like the others, but they are not part of the ${CARNET_GESTES.length} badges.`,
+    gesteLibreVide: "Unnamed task",
+    erreurGesteLibre: "Write the task you did before sending.",
+    erreurEnginLibre: "Write the machine you used before sending.",
+    erreurEnginJournal: "Write the main machine for your day.",
     note: "Note for your teacher (optional)",
     notePlaceholder: "E.g. graded the pad for the garage slab",
     envoyer: "Send to my teacher",
@@ -229,7 +292,9 @@ const CARNET_T = {
     erreurPhotoGrosse: "That photo is too heavy even after compression. Try another one.",
     erreurHeures: "Enter a date and a number of hours between 0.5 and 14.",
     erreurStockage: "Your phone's storage is full. Wait until you have a signal so the queue can be sent, then try again.",
-    supprimer: "Delete"
+    supprimer: "Delete",
+    flashValidee: "Your teacher has just signed off:",
+    flashRefaire: "Your teacher is asking you to redo:"
   }
 };
 
@@ -272,8 +337,24 @@ async function carnetRefreshOption() {
 /* ------------------------------------------------------------------ */
 var carnetView = null;        // null | "gestes" | "ajouter" | "heures" | "reglages"
 var carnetGestePre = null;    // geste présélectionné dans le formulaire
+var carnetGestePreLibre = ""; // texte libre présélectionné (reprise d'un « à refaire »)
 var carnetPhotoDraft = null;  // data URI de la photo en cours de saisie
 var carnetErreur = "";
+var carnetFlash = null;       // { ok, txt } — la décision du prof vient d'arriver
+
+/* BROUILLONS DU FORMULAIRE.
+   `render()` réécrit tout le innerHTML : sans ces variables, choisir une
+   photo ou tomber sur un message d'erreur effacerait le texte que l'élève
+   vient de taper — et un champ libre OBLIGATOIRE qui disparaît au moment
+   où on reproche à l'élève de l'avoir laissé vide serait incompréhensible.
+   `carnetMemoriser()` les relit du DOM avant chaque render(). */
+var carnetGesteSel = null;    // valeur du <select> geste
+var carnetGesteLibre = "";    // texte du geste écrit à la main
+var carnetEnginSel = null;    // valeur du <select> engin
+var carnetEnginLibre = "";    // texte de l'engin écrit à la main
+var carnetNoteDraft = "";     // note en cours de saisie
+var carnetHEnginSel = null;   // <select> engin principal (journal d'heures)
+var carnetHEnginLibre = "";   // engin principal écrit à la main
 
 function carnetState() {
   if (!state.carnet || typeof state.carnet !== "object") {
@@ -304,13 +385,20 @@ function carnetRef() {
   return Array.from(b).map((o) => o.toString(16).padStart(2, "0")).join("");
 }
 
-/* Dernière réalisation d'un geste (la plus récente prime). */
+/* Dernière réalisation d'un geste de la LISTE (la plus récente prime).
+   ⚠️ Volontairement aveugle à `autre` : les gestes écrits à la main
+   partagent tous le même `geste_id`, ils n'ont donc ni « dernier » ni
+   statut commun. Chacun vit par sa `ref`, et ils sont affichés à part
+   (voir carnetGestesLibres()). Sans cette garde, un geste libre validé
+   aurait bloqué l'envoi de tous les suivants. */
 function carnetDerniere(gesteId) {
+  if (gesteId === CARNET_GESTE_AUTRE) return null;
   const l = carnetState().realisations.filter((r) => r.gesteId === gesteId);
   l.sort((a, b) => (a.creeLe < b.creeLe ? 1 : a.creeLe > b.creeLe ? -1 : 0));
   return l[0] || null;
 }
 function carnetStatutGeste(gesteId) {
+  if (gesteId === CARNET_GESTE_AUTRE) return "afaire";
   const r = carnetDerniere(gesteId);
   return r ? r.statut : "afaire";
 }
@@ -402,18 +490,145 @@ async function carnetSyncStatuts() {
   const lignes = await carnetRpc("carnet_etat_eleve", { p_app: APP_ID, p_appareil: deviceId() });
   if (!Array.isArray(lignes)) return;
   let change = false;
+  const valides = [], refaits = [];
   for (const ligne of lignes) {
     const r = c.realisations.find((x) => x.ref === ligne.ref);
     if (!r) continue;
     const nouveau = ligne.statut === "validee" || ligne.statut === "refaire" ? ligne.statut : "attente";
     if (nouveau !== r.statut || (ligne.commentaire_prof || "") !== (r.commentaire || "")) {
+      const avant = r.statut;
       r.statut = nouveau;
       r.commentaire = ligne.commentaire_prof || "";
       r.decideLe = ligne.decide_le || null;
       change = true;
+      if (avant !== nouveau && (nouveau === "validee" || nouveau === "refaire")) {
+        const g = CARNET_GESTES.find((x) => x.id === r.gesteId);
+        const nom = g ? gesteNom(g) : (r.gesteNom || r.gesteId);
+        (nouveau === "validee" ? valides : refaits).push(nom);
+      }
     }
   }
+  // La décision arrive pendant que l'élève regarde : on le lui DIT, sinon un
+  // changement de pastille passe inaperçu.
+  if (valides.length || refaits.length) {
+    const T = ct();
+    carnetFlash = valides.length
+      ? { ok: true,  txt: T.flashValidee + " " + valides.join(", ") }
+      : { ok: false, txt: T.flashRefaire + " " + refaits.join(", ") };
+  }
   if (change) { saveState(); render(); }
+  carnetPollSync();   // plus rien en attente ? la relecture s'arrête d'elle-même
+}
+
+
+/* ------------------------------------------------------------------ */
+/* QUAND RELIRE — sans jamais ouvrir quoi que ce soit à `anon`          */
+/* ------------------------------------------------------------------ */
+/* ⚠️ POURQUOI PAS DE TEMPS RÉEL ICI.
+   Supabase Realtime ne diffuse un changement à un abonné que si la policy
+   `select` de la table l'autorise pour le rôle de son jeton. L'app élève est
+   anonyme : `anon` n'a AUCUN privilège sur `carnet_realisations` et aucune
+   policy (revoke all, voir supabase_carnet.sql §5). Un abonnement temps réel
+   ne lui livrerait donc rien — et il ne faut SURTOUT PAS lui accorder un
+   `select` pour que ça marche : la clé publiable est dans le code source de
+   cette PWA, ce serait ouvrir les réalisations (photos incluses) de tous les
+   centres à quiconque lit la source.
+
+   L'élève est donc servi par RELECTURE de `carnet_etat_eleve` — une fonction
+   security definer bornée à SON identifiant d'appareil, qui ne rend ni photo,
+   ni nom, ni employeur, ni courriel d'enseignant. Deux déclencheurs :
+
+   1. LE RETOUR DANS L'APP (`visibilitychange` + `focus`) — le cas réel le plus
+      fréquent : l'élève sort de l'app sur le chantier, revient plus tard, la
+      réponse de son enseignant est déjà là.
+   2. UNE RELECTURE LÉGÈRE PENDANT QUE LE CARNET EST OUVERT — pour que la
+      décision du prof arrive sans qu'on touche au téléphone.
+
+   La relecture périodique est volontairement avare. Elle ne tourne QUE si les
+   quatre conditions sont réunies : vue des gestes ouverte, app au premier plan,
+   réseau présent, et au moins une réalisation réellement en attente de décision.
+   Dès qu'une seule tombe, la minuterie s'arrête. Un élève sur un chantier n'a
+   pas un forfait illimité, et sa batterie compte. */
+
+/* 20 s : la décision d'un enseignant arrive dans le temps d'un regard (c'est le
+   geste de la démonstration : le prof valide, le téléphone suit), et la charge
+   reste dérisoire — un POST de ~1 ko, soit ~180 ko pour une heure complète
+   d'écran allumé sur cette seule vue. Plus court n'ajouterait rien de
+   perceptible ; plus long rendrait la séquence molle devant une salle. */
+const CARNET_POLL_MS = 20000;
+
+/* Plafond de prudence : au-delà de 10 minutes de relecture d'affilée, on
+   s'arrête. Un téléphone oublié écran allumé sur cette vue ne doit pas pianoter
+   indéfiniment. Le compteur repart à zéro à chaque retour au premier plan, à
+   chaque entrée dans la vue et au moindre contact avec l'écran — une
+   démonstration ne peut donc pas tomber dessus. */
+const CARNET_POLL_MAX_MS = 10 * 60 * 1000;
+
+var carnetPollTimer = null;
+var carnetPollDepart = 0;
+var carnetReveilDernier = 0;
+
+/* Reste-t-il une décision à attendre ? Si non, rien ne sert à relire. */
+function carnetEnAttenteDeProf() {
+  if (!carnetDisponible()) return false;
+  return carnetState().realisations.some((r) => !r.aEnvoyer && r.statut === "attente");
+}
+
+function carnetPollDoitTourner() {
+  return carnetDisponible()
+    && carnetView === "gestes"
+    && typeof document !== "undefined" && document.visibilityState === "visible"
+    && navigator.onLine
+    && carnetEnAttenteDeProf();
+}
+
+function carnetPollStop() {
+  if (carnetPollTimer) { clearInterval(carnetPollTimer); carnetPollTimer = null; }
+}
+
+function carnetPollStart() {
+  carnetPollStop();
+  if (!carnetPollDoitTourner()) return;
+  carnetPollDepart = Date.now();
+  carnetPollTimer = setInterval(function () {
+    // Garde à chaque tour : si la vue a été quittée, l'app mise en arrière-plan
+    // ou le réseau perdu sans qu'on nous l'ait dit, la minuterie se coupe
+    // elle-même au tour suivant. Aucun moyen de la laisser tourner par oubli.
+    if (!carnetPollDoitTourner()) { carnetPollStop(); return; }
+    if (Date.now() - carnetPollDepart > CARNET_POLL_MAX_MS) { carnetPollStop(); return; }
+    carnetSyncStatuts();
+  }, CARNET_POLL_MS);
+}
+
+/* Démarre ou arrête selon l'état courant — appelée depuis le rendu du carnet,
+   donc une seule source de vérité. */
+function carnetPollSync() {
+  if (carnetPollDoitTourner()) { if (!carnetPollTimer) carnetPollStart(); }
+  else carnetPollStop();
+}
+
+/* RETOUR DANS L'APP. Branchée sur `visibilitychange`, `focus` et `online`
+   (voir le bas d'app.js). Étranglée à 2 s : les trois événements se suivent
+   souvent, on ne veut qu'une relecture. */
+function carnetReveil() {
+  if (!carnetDisponible()) { carnetPollStop(); return; }
+  if (typeof document !== "undefined" && document.visibilityState !== "visible") {
+    carnetPollStop();           // app en arrière-plan : on coupe tout de suite
+    return;
+  }
+  const now = Date.now();
+  if (now - carnetReveilDernier < 2000) { carnetPollSync(); return; }
+  carnetReveilDernier = now;
+  carnetRefreshOption();        // l'option est-elle toujours au contrat du centre ?
+  carnetSyncStatuts();          // la décision de l'enseignant est peut-être déjà là
+  if (typeof flushSync === "function") flushSync();   // et la file hors ligne repart
+  carnetPollStart();            // relance la relecture et remet le plafond à zéro
+}
+
+/* Le moindre contact remet le plafond de 10 minutes à zéro. */
+function carnetPollReveilTactile() {
+  if (!carnetPollTimer) { carnetPollSync(); return; }
+  carnetPollDepart = Date.now();
 }
 
 /* Appel RPC générique. Renvoie la valeur JSON, ou null en cas d'échec
@@ -442,16 +657,38 @@ async function carnetRpc(nom, corps) {
 /* Navigation                                                          */
 /* ------------------------------------------------------------------ */
 function carnetGo(vue) {
-  if (!carnetDisponible()) { carnetView = null; render(); return; }
+  if (!carnetDisponible()) { carnetView = null; carnetPollStop(); render(); return; }
   carnetErreur = "";
-  if (vue === "ajouter") carnetPhotoDraft = null;
+  carnetFlash = null;
+  if (vue === "ajouter") {
+    carnetPhotoDraft = null;
+    // On consomme la présélection une seule fois : revenir par l'onglet
+    // « Ajouter » ne doit pas réafficher le geste d'un clic précédent.
+    carnetGesteSel = carnetGestePre || null;
+    carnetGesteLibre = carnetGestePreLibre || "";
+    carnetGestePre = null;
+    carnetGestePreLibre = "";
+    carnetEnginSel = null;
+    carnetEnginLibre = "";
+    carnetNoteDraft = "";
+  }
+  if (vue === "heures") { carnetHEnginSel = null; carnetHEnginLibre = ""; }
   carnetView = vue || "gestes";
   if (typeof currentQuest !== "undefined") currentQuest = null;
   render();
   if (carnetView === "gestes") carnetSyncStatuts();
 }
-function carnetQuitter() { carnetView = null; render(); }
-function carnetGesteDirect(id) { carnetGestePre = id; carnetGo("ajouter"); }
+function carnetQuitter() { carnetView = null; carnetFlash = null; carnetPollStop(); render(); }
+function carnetGesteDirect(id) { carnetGestePre = id; carnetGestePreLibre = ""; carnetGo("ajouter"); }
+
+/* Reprendre un geste écrit à la main que l'enseignant renvoie « à refaire » :
+   on repasse par « Autre » avec le texte déjà rempli. */
+function carnetGesteAutreDirect(ref) {
+  const r = carnetState().realisations.find((x) => x.ref === ref);
+  carnetGestePre = CARNET_GESTE_AUTRE;
+  carnetGestePreLibre = r ? (r.gesteNom || "") : "";
+  carnetGo("ajouter");
+}
 
 /* ------------------------------------------------------------------ */
 /* Rendu                                                              */
@@ -483,6 +720,10 @@ function renderCarnet() {
       ${corps}
     </div>
     ${privacyFooter()}`;
+
+  // SEULE source de vérité pour la relecture périodique : on la (re)met en
+  // phase avec ce qui est réellement affiché, à chaque rendu du carnet.
+  carnetPollSync();
 }
 
 /* --- Consentement (Loi 25) : premier écran, bloquant --- */
@@ -542,6 +783,51 @@ function carnetEnregistrerReglages() {
   flushSync();
 }
 
+/* --- Les gestes écrits à la main, à part --- */
+/* Ils ne sont PAS dans la grille des badges et ne comptent pas dans le
+   « x / 8 » : un geste inventé par l'élève ne correspond à aucun badge, et
+   l'interface ne doit pas promettre une récompense qui n'arrivera jamais.
+   Ils ont en revanche besoin d'exister à l'écran, sinon l'élève n'aurait
+   aucun moyen de voir la décision de son enseignant. Chacun vit par sa
+   `ref`, pas par son `geste_id` (qui vaut 'autre' pour tous). */
+function carnetGestesLibres() {
+  const T = ct();
+  const libres = carnetState().realisations
+    .filter((r) => r.gesteId === CARNET_GESTE_AUTRE)
+    .sort((a, b) => (a.creeLe < b.creeLe ? 1 : a.creeLe > b.creeLe ? -1 : 0));
+  if (!libres.length) return "";
+
+  const lignes = libres.map((r) => {
+    const st = r.statut === "validee" || r.statut === "refaire" ? r.statut : "attente";
+    const cliquable = st === "refaire";
+    let bas = "";
+    if (st === "refaire") {
+      bas = `<div class="carnet-sub refaire">${T.retourProf} : « ${escapeHtml(r.commentaire || "—")} »</div>
+             <div class="carnet-sub">${T.refaireAide}</div>`;
+    } else if (st === "attente") {
+      bas = `<div class="carnet-sub">${T.envoyeLe} ${carnetDate(r.creeLe)}${r.aEnvoyer ? " · " + T.enFile : ""}</div>`;
+    } else {
+      bas = `<div class="carnet-sub ok">${T.valideeLe} ${carnetDate(r.decideLe || r.creeLe)}${r.commentaire ? " · « " + escapeHtml(r.commentaire) + " »" : ""}</div>`;
+    }
+    return `<div class="carnet-row ${cliquable ? "cliquable" : ""}" ${cliquable ? `onclick="carnetGesteAutreDirect('${String(r.ref).replace(/[^0-9A-Za-z-]/g, "")}')"` : ""}>
+      <div class="carnet-row-main">
+        <span class="carnet-row-icon">✍️</span>
+        <span class="carnet-row-nom">${escapeHtml(r.gesteNom || T.gesteLibreVide)}</span>
+        <span class="carnet-pill ${st}">${T.statut[st]}</span>
+      </div>
+      ${r.engin ? `<div class="carnet-sub">${escapeHtml(r.engin)}</div>` : ""}
+      ${bas}
+    </div>`;
+  }).join("");
+
+  return `
+    <div class="carnet-card">
+      <h3>${escapeHtml(T.mesGestesLibres)}</h3>
+      <p class="carnet-sub">${escapeHtml(T.libresSansBadge)}</p>
+    </div>
+    <div class="carnet-list">${lignes}</div>`;
+}
+
 /* --- Liste des gestes + badges --- */
 function carnetGestes() {
   const T = ct();
@@ -580,7 +866,12 @@ function carnetGestes() {
     </div>`;
   }).join("");
 
+  const flash = carnetFlash
+    ? `<div class="carnet-flash ${carnetFlash.ok ? "ok" : "refaire"}">${carnetFlash.ok ? "✅" : "↩"} ${escapeHtml(carnetFlash.txt)}</div>`
+    : "";
+
   return `
+    ${flash}
     <div class="carnet-card carnet-stage" onclick="carnetGo('reglages')">
       <div class="carnet-stage-txt">
         <div class="carnet-eyebrow">${c.employeur ? T.stageChez : ""}</div>
@@ -601,7 +892,77 @@ function carnetGestes() {
     </div>
 
     <div class="carnet-list">${lignes}</div>
+    ${carnetGestesLibres()}
     <button class="cta" onclick="carnetGo('ajouter')">📷 ${T.ajouterCta}</button>`;
+}
+
+/* ------------------------------------------------------------------ */
+/* « Autre — je l'écris moi-même »                                     */
+/* ------------------------------------------------------------------ */
+/* Le champ libre est TOUJOURS dans le DOM, simplement `hidden`. On bascule
+   l'attribut au lieu de relancer render() : un render() effacerait la note
+   et la photo en cours de saisie. */
+function carnetBasculeLibre(idSel, idWrap, sentinelle) {
+  const sel = document.getElementById(idSel);
+  const wrap = document.getElementById(idWrap);
+  if (!sel || !wrap) return;
+  wrap.hidden = sel.value !== sentinelle;
+}
+
+/* Relit les champs du formulaire d'ajout avant un render() qui les écraserait. */
+function carnetMemoriser() {
+  const g  = document.getElementById("carnetGesteSel");
+  const gl = document.getElementById("carnetGesteLibre");
+  const e  = document.getElementById("carnetEnginSel");
+  const el = document.getElementById("carnetEnginLibre");
+  const n  = document.getElementById("carnetNote");
+  if (g)  carnetGesteSel   = g.value;
+  if (gl) carnetGesteLibre = gl.value;
+  if (e)  carnetEnginSel   = e.value;
+  if (el) carnetEnginLibre = el.value;
+  if (n)  carnetNoteDraft  = n.value;
+}
+function carnetMemoriserHeures() {
+  const e  = document.getElementById("carnetHEngin");
+  const el = document.getElementById("carnetHEnginLibre");
+  if (e)  carnetHEnginSel   = e.value;
+  if (el) carnetHEnginLibre = el.value;
+}
+
+function carnetMajGesteLibre() { carnetMemoriser(); carnetBasculeLibre("carnetGesteSel", "carnetGesteLibreWrap", CARNET_GESTE_AUTRE); }
+function carnetMajEnginLibre() { carnetMemoriser(); carnetBasculeLibre("carnetEnginSel", "carnetEnginLibreWrap", CARNET_AUTRE); }
+function carnetMajHEnginLibre() { carnetMemoriserHeures(); carnetBasculeLibre("carnetHEngin", "carnetHEnginLibreWrap", CARNET_AUTRE); }
+
+/* Normalise une saisie libre : espaces écrasés, plafond dur. Le plafond est
+   déjà posé par maxlength côté champ — on le repose ici, parce qu'un
+   maxlength ne survit pas à un collage programmatique. */
+function carnetTexteLibre(id, max) {
+  const el = document.getElementById(id);
+  const v = el ? String(el.value || "") : "";
+  return v.replace(/\s+/g, " ").trim().slice(0, max);
+}
+
+/* Le <select> des engins, partagé par le formulaire et le journal d'heures.
+   `valeurSel` permet de retrouver le choix de l'élève après un render(). */
+function carnetOptionsEngins(valeurSel) {
+  const T = ct();
+  const liste = CARNET_ENGINS.map((e) => {
+    const nom = enginNom(e);
+    return `<option value="${escapeHtml(nom)}"${valeurSel === nom ? " selected" : ""}>${escapeHtml(nom)}</option>`;
+  }).join("");
+  return liste + `<option value="${CARNET_AUTRE}"${valeurSel === CARNET_AUTRE ? " selected" : ""}>${escapeHtml(T.autreOption)}</option>`;
+}
+
+/* Bloc « champ libre » générique : masqué tant que « Autre » n'est pas choisi. */
+function carnetChampLibre(id, label, placeholder, max, valeur, visible, aide) {
+  return `
+      <div id="${id}Wrap" class="carnet-libre"${visible ? "" : " hidden"}>
+        <label class="field-label" for="${id}">${escapeHtml(label)}</label>
+        <input id="${id}" class="carnet-input" type="text" maxlength="${max}"
+          placeholder="${escapeHtml(placeholder)}" value="${escapeHtml(valeur)}"
+          autocapitalize="sentences" autocomplete="off" />
+        ${aide ? `<p class="carnet-sub carnet-libre-aide">${escapeHtml(aide)}</p>` : ""}
+      </div>`;
 }
 
 /* --- Formulaire d'ajout --- */
@@ -615,12 +976,13 @@ function carnetFormulaire() {
 
   const options = CARNET_GESTES.map((g) => {
     const s = carnetStatutGeste(g.id);
-    const sel = carnetGestePre === g.id ? " selected" : "";
+    const sel = carnetGesteSel === g.id ? " selected" : "";
     const dis = s === "validee" ? " disabled" : "";
     const suffixe = s !== "afaire" ? ` (${T.statut[s].toLowerCase()})` : "";
     return `<option value="${g.id}"${sel}${dis}>${escapeHtml(gesteNom(g) + suffixe)}</option>`;
-  }).join("");
-  const engins = CARNET_ENGINS.map((e) => `<option>${escapeHtml(enginNom(e))}</option>`).join("");
+  }).join("")
+  + `<option value="${CARNET_GESTE_AUTRE}"${carnetGesteSel === CARNET_GESTE_AUTRE ? " selected" : ""}>${escapeHtml(T.autreOption)}</option>`;
+  const engins = carnetOptionsEngins(carnetEnginSel);
 
   return `
     <div class="carnet-card">
@@ -634,14 +996,18 @@ function carnetFormulaire() {
       ${carnetPhotoDraft ? `<button class="secondary" onclick="carnetRetirerPhoto()">${T.photoRetirer}</button>` : ""}
 
       <label class="field-label" for="carnetGesteSel">${T.geste}</label>
-      <select id="carnetGesteSel" class="carnet-input">${options}</select>
+      <select id="carnetGesteSel" class="carnet-input" onchange="carnetMajGesteLibre()">${options}</select>
+      ${carnetChampLibre("carnetGesteLibre", T.gesteLibre, T.gesteLibrePH, CARNET_GESTE_LIBRE_MAX,
+          carnetGesteLibre, carnetGesteSel === CARNET_GESTE_AUTRE, T.libreSansBadge)}
 
       <label class="field-label" for="carnetEnginSel">${T.engin}</label>
-      <select id="carnetEnginSel" class="carnet-input">${engins}</select>
+      <select id="carnetEnginSel" class="carnet-input" onchange="carnetMajEnginLibre()">${engins}</select>
+      ${carnetChampLibre("carnetEnginLibre", T.enginLibre, T.enginLibrePH, CARNET_ENGIN_LIBRE_MAX,
+          carnetEnginLibre, carnetEnginSel === CARNET_AUTRE, "")}
 
       <label class="field-label" for="carnetNote">${T.note}</label>
       <textarea id="carnetNote" class="carnet-input carnet-textarea" maxlength="500"
-        placeholder="${escapeHtml(T.notePlaceholder)}"></textarea>
+        placeholder="${escapeHtml(T.notePlaceholder)}">${escapeHtml(carnetNoteDraft)}</textarea>
 
       <button class="cta" onclick="carnetSoumettre()">${T.envoyer}</button>
       <button class="secondary" onclick="carnetGo('gestes')">${T.retour}</button>
@@ -683,27 +1049,45 @@ async function carnetPhotoChoisie(input) {
   const f = input && input.files && input.files[0];
   if (!f) return;
   const T = ct();
+  carnetMemoriser();          // le render() qui suit réécrit tout le formulaire
   const r = await carnetLirePhoto(f);
   if (r.photo) { carnetPhotoDraft = r.photo; carnetErreur = ""; }
   else { carnetPhotoDraft = null; carnetErreur = r.err === "grosse" ? T.erreurPhotoGrosse : T.erreurPhoto; }
   render();
 }
-function carnetRetirerPhoto() { carnetPhotoDraft = null; render(); }
+function carnetRetirerPhoto() { carnetMemoriser(); carnetPhotoDraft = null; render(); }
 
 function carnetSoumettre() {
   const T = ct();
   const c = carnetState();
-  const gesteId = document.getElementById("carnetGesteSel").value;
-  const g = CARNET_GESTES.find((x) => x.id === gesteId);
-  if (!g) return;
-  if (carnetStatutGeste(gesteId) === "validee") { carnetErreur = T.dejaValide; render(); return; }
+  carnetMemoriser();          // tout render() ci-dessous repart de ces brouillons
+  const gesteId = carnetGesteSel;
+
+  // --- Le geste : soit un id de la liste, soit 'autre' + le texte de l'élève.
+  let gesteLibelle;
+  if (gesteId === CARNET_GESTE_AUTRE) {
+    gesteLibelle = carnetTexteLibre("carnetGesteLibre", CARNET_GESTE_LIBRE_MAX);
+    if (!gesteLibelle) { carnetErreur = T.erreurGesteLibre; render(); return; }
+  } else {
+    const g = CARNET_GESTES.find((x) => x.id === gesteId);
+    if (!g) return;
+    if (carnetStatutGeste(gesteId) === "validee") { carnetErreur = T.dejaValide; render(); return; }
+    gesteLibelle = gesteNom(g);
+  }
+
+  // --- L'engin : la colonne est déjà du texte libre, on y met ce qui est tapé.
+  let engin = carnetEnginSel || "";
+  if (engin === CARNET_AUTRE) {
+    engin = carnetTexteLibre("carnetEnginLibre", CARNET_ENGIN_LIBRE_MAX);
+    if (!engin) { carnetErreur = T.erreurEnginLibre; render(); return; }
+  }
 
   const ligne = {
-    ref: carnetRef(),
-    gesteId: gesteId,
-    gesteNom: gesteNom(g),
-    engin: document.getElementById("carnetEnginSel").value || "",
-    note: (document.getElementById("carnetNote").value || "").trim().slice(0, 500),
+    ref: carnetRef(),          // UUID par réalisation : deux gestes « autre »
+    gesteId: gesteId,          // ne peuvent pas s'écraser à l'upsert
+    gesteNom: gesteLibelle,
+    engin: engin,
+    note: carnetNoteDraft.trim().slice(0, 500),
     photo: carnetPhotoDraft || null,
     photoEnvoyee: false,
     statut: "attente",      // seul l'enseignant peut faire bouger ce champ
@@ -726,6 +1110,12 @@ function carnetSoumettre() {
 
   carnetPhotoDraft = null;
   carnetGestePre = null;
+  carnetGestePreLibre = "";
+  carnetGesteSel = null;
+  carnetGesteLibre = "";
+  carnetEnginSel = null;
+  carnetEnginLibre = "";
+  carnetNoteDraft = "";
   carnetErreur = "";
   carnetGo("gestes");
   flushSync();              // part tout de suite si le réseau est là, sinon reste en file
@@ -737,7 +1127,7 @@ function carnetHeures() {
   const c = carnetState();
   const h = carnetTotalHeures();
   const pct = Math.min(100, Math.round((h / c.objectif) * 100));
-  const engins = CARNET_ENGINS.map((e) => `<option>${escapeHtml(enginNom(e))}</option>`).join("");
+  const engins = carnetOptionsEngins(carnetHEnginSel);
   const journal = c.heures.slice().sort((a, b) => (a.date < b.date ? 1 : -1)).map((x) => `
     <div class="carnet-log-row">
       <span class="carnet-log-date">${escapeHtml(x.date)}</span>
@@ -765,7 +1155,9 @@ function carnetHeures() {
         </div>
       </div>
       <label class="field-label" for="carnetHEngin">${T.enginPrincipal}</label>
-      <select id="carnetHEngin" class="carnet-input">${engins}</select>
+      <select id="carnetHEngin" class="carnet-input" onchange="carnetMajHEnginLibre()">${engins}</select>
+      ${carnetChampLibre("carnetHEnginLibre", T.enginLibre, T.enginLibrePH, CARNET_ENGIN_LIBRE_MAX,
+          carnetHEnginLibre, carnetHEnginSel === CARNET_AUTRE, "")}
       <button class="cta" onclick="carnetAjouterHeures()">${T.ajouterJournal}</button>
     </div>
     <div class="carnet-card">
@@ -786,11 +1178,24 @@ function carnetDate(iso) {
 function carnetAjouterHeures() {
   const T = ct();
   const c = carnetState();
+  carnetMemoriserHeures();     // tout render() ci-dessous réécrit la carte
   const d = document.getElementById("carnetHDate").value;
   const h = Number(document.getElementById("carnetHH").value);
   if (!d || !(h >= 0.5 && h <= 14)) { carnetErreur = T.erreurHeures; render(); return; }
-  c.heures.push({ date: d, h: h, engin: document.getElementById("carnetHEngin").value || "" });
+
+  // Le journal d'heures NE QUITTE PAS l'appareil (seul le total part dans
+  // carnet_heures_maj) : l'engin principal n'arrive jamais au tableau de bord.
+  // On le plafonne et on l'échappe quand même à l'affichage, par cohérence.
+  let engin = carnetHEnginSel || "";
+  if (engin === CARNET_AUTRE) {
+    engin = carnetTexteLibre("carnetHEnginLibre", CARNET_ENGIN_LIBRE_MAX);
+    if (!engin) { carnetErreur = T.erreurEnginJournal; render(); return; }
+  }
+
+  c.heures.push({ date: d, h: h, engin: engin.slice(0, CARNET_ENGIN_LIBRE_MAX) });
   c.heuresEnFile = true;
+  carnetHEnginSel = null;
+  carnetHEnginLibre = "";
   carnetErreur = "";
   saveState();
   render();
@@ -798,6 +1203,7 @@ function carnetAjouterHeures() {
 }
 function carnetSupprimerHeure(date, h) {
   const c = carnetState();
+  carnetMemoriserHeures();
   const i = c.heures.findIndex((x) => x.date === date && Number(x.h) === Number(h));
   if (i < 0) return;
   c.heures.splice(i, 1);
@@ -813,6 +1219,10 @@ function carnetSupprimerHeure(date, h) {
 window.carnetGo = carnetGo;
 window.carnetQuitter = carnetQuitter;
 window.carnetGesteDirect = carnetGesteDirect;
+window.carnetGesteAutreDirect = carnetGesteAutreDirect;
+window.carnetMajGesteLibre = carnetMajGesteLibre;
+window.carnetMajEnginLibre = carnetMajEnginLibre;
+window.carnetMajHEnginLibre = carnetMajHEnginLibre;
 window.carnetAccepter = carnetAccepter;
 window.carnetEnregistrerReglages = carnetEnregistrerReglages;
 window.carnetPhotoChoisie = carnetPhotoChoisie;

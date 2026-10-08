@@ -717,7 +717,10 @@ button {
 .carnet-row.cliquable:active { border-color: var(--safety-yellow); }
 .carnet-row-main { display: flex; align-items: center; gap: 9px; }
 .carnet-row-icon { font-size: 18px; width: 22px; text-align: center; flex: none; }
-.carnet-row-nom { flex: 1; font-size: 13.5px; font-weight: 600; min-width: 0; }
+/* `overflow-wrap: anywhere` : le nom d'un geste peut maintenant être écrit
+   par l'élève. Un mot de 40 caractères sans espace ne doit pas pousser la
+   pastille de statut hors de la carte. */
+.carnet-row-nom { flex: 1; font-size: 13.5px; font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
 .carnet-pill { font-size: 10.5px; font-weight: 700; padding: 3px 9px; border-radius: 99px; white-space: nowrap; flex: none; }
 .carnet-pill.attente { background: var(--dark-2); color: var(--muted); }
 .carnet-pill.validee { background: #1f3325; color: var(--success); }
@@ -736,7 +739,24 @@ button {
   font-family: inherit;
 }
 .carnet-textarea { min-height: 80px; resize: vertical; }
-.carnet-inline { display: grid; grid-template-columns: 1fr 90px; gap: 8px; }
+/* Date + Heures côte à côte.
+   ⚠️ CORRECTIF (vu sur iPhone, Safari iOS, ~390 px) : les enfants d'une
+   grille ont `min-width: auto` et REFUSENT de descendre sous la largeur
+   intrinsèque de leur contenu. Le <input type="date"> natif de Safari iOS
+   est large (« 8 oct. 2026 » + ses contrôles) : il débordait de la colonne
+   `1fr` et recouvrait la case Heures. `min-width: 0` sur les deux colonnes
+   ET sur les champs eux-mêmes (ils sont petits-enfants) autorise le
+   rétrécissement. 96 px au lieu de 90 : la case Heures et son étiquette
+   tiennent sans se faire couper à 375 px. */
+.carnet-inline { display: grid; grid-template-columns: 1fr 96px; gap: 8px; }
+.carnet-inline > * { min-width: 0; }
+.carnet-inline .carnet-input { min-width: 0; max-width: 100%; }
+
+/* Champ libre « Autre — je l'écris moi-même ». Pleine largeur, donc aucun
+   risque de reproduire le débordement de la grille ci-dessus. */
+.carnet-libre[hidden] { display: none; }
+.carnet-libre .carnet-input { width: 100%; min-width: 0; }
+.carnet-libre-aide { margin-top: 6px; }
 .carnet-file { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 .carnet-drop {
   display: grid; place-items: center; gap: 6px;
@@ -756,9 +776,33 @@ button {
   gap: 8px; align-items: center;
   padding: 9px 0; border-bottom: 1px solid #3a444c; font-size: 12.5px;
 }
+/* L'engin d'une journée peut être écrit à la main : la colonne doit pouvoir
+   rétrécir (même raison que .carnet-inline ci-dessus), le texte est déjà
+   coupé par l'ellipse de .carnet-log-engin. */
+.carnet-log-row > * { min-width: 0; }
 .carnet-log-row:last-child { border-bottom: none; }
 .carnet-log-date { color: var(--muted); font-variant-numeric: tabular-nums; }
 .carnet-log-engin { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .carnet-log-h { font-weight: 700; color: var(--safety-yellow); font-variant-numeric: tabular-nums; }
 .carnet-log-del { background: none; color: var(--muted); font-size: 14px; padding: 2px 4px; }
 .carnet-log-del:hover { color: var(--danger); }
+
+/* --- StageQuest : la décision de l'enseignant vient d'arriver --- */
+/* Un changement de pastille passe inaperçu : on l'annonce en haut de la vue. */
+.carnet-flash {
+  border-radius: 12px;
+  padding: 11px 13px;
+  margin-bottom: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+  border: 1px solid transparent;
+  animation: carnet-flash-in .45s ease-out;
+}
+.carnet-flash.ok { background: #1f3325; color: var(--success); border-color: #2c5a37; }
+.carnet-flash.refaire { background: #3a2020; color: #ff8f8f; border-color: #5a2d2d; }
+@keyframes carnet-flash-in {
+  from { transform: translateY(-6px); opacity: 0; }
+  to   { transform: none; opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) { .carnet-flash { animation: none; } }

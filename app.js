@@ -708,6 +708,10 @@ function carnetDisponible() {
 }
 function clearCarnetView() {
   if (typeof carnetView !== "undefined") carnetView = null;
+  // Quitter le carnet coupe la relecture périodique sur-le-champ (c'est la
+  // seule porte de sortie : goMap/goBadges/goTrophies/goLeaderboard y passent).
+  if (typeof carnetPollStop === "function") carnetPollStop();
+  if (typeof carnetFlash !== "undefined") carnetFlash = null;
 }
 
 function progressPct() {
@@ -1914,9 +1918,28 @@ applyUrlCode();   // rattache l'élève automatiquement si un ?code= est présen
    chargé ou si le centre n'a pas l'option au contrat. */
 if (typeof carnetRefreshOption === "function") {
   carnetRefreshOption();    // l'option est-elle (toujours) active pour ce code de licence ?
-  carnetSyncStatuts();      // redescend les décisions du maître de stage
+  carnetSyncStatuts();      // redescend les décisions de l'enseignant
   window.addEventListener("online", carnetRefreshOption);
   window.addEventListener("online", carnetSyncStatuts);
+
+  /* LE RETOUR DANS L'APP — le cas le plus fréquent en vrai : l'élève envoie sa
+     réalisation, sort de l'app, revient plus tard. La décision de son
+     enseignant doit être là SANS qu'il ait à recharger la page.
+     `visibilitychange` couvre l'essentiel (retour à l'app sur iOS et Android,
+     onglet remis au premier plan) ; `focus` rattrape les cas où iOS ne tire pas
+     visibilitychange depuis une PWA installée. `carnetReveil()` est étranglée à
+     2 s, donc les deux événements ne font qu'UNE relecture.
+     Aucun privilège nouveau n'est utilisé : c'est la RPC `carnet_etat_eleve`,
+     bornée à l'identifiant d'appareil de cet élève. */
+  if (typeof carnetReveil === "function") {
+    document.addEventListener("visibilitychange", carnetReveil);
+    window.addEventListener("focus", carnetReveil);
+    window.addEventListener("online", carnetReveil);
+    // App mise de côté : on coupe la relecture périodique sans attendre.
+    window.addEventListener("pagehide", carnetPollStop);
+    // Tout contact repousse le plafond de 10 min de la relecture périodique.
+    document.addEventListener("pointerdown", carnetPollReveilTactile, { passive: true });
+  }
 }
 
 /* PWA service worker */
