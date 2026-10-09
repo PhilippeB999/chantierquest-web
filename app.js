@@ -1879,20 +1879,68 @@ window.closeClassJoin = closeClassJoin;
 window.toggleDraftShare = toggleDraftShare;
 window.joinClass = joinClass;
 
-/* ------------------ Code de classe dans l'URL (?code=) ------------------
-   Un lien du type .../?code=DEMO-5220 rattache l'élève à sa cohorte
+/* ------------------ Paramètres dans l'URL (?licence= et ?code=) ------------------
+   Deux paramètres, deux rôles bien distincts :
+     · ?licence=STAGE-DEMO-2026   → pose la LICENCE (débloque le programme
+       complet et, si le code porte l'option, l'onglet « Stage »).
+     · ?code=ESHORE-5220          → rattache l'élève à sa CLASSE (cohorte).
+   Ils fonctionnent ensemble (`?licence=X&code=Y`) ou séparément.
+
+   ⚠️ POURQUOI UNE SEULE LECTURE ET UN SEUL NETTOYAGE
+   `history.replaceState(null,"",location.pathname+location.hash)` efface TOUS
+   les paramètres d'un coup. Si chaque traitement nettoyait l'URL de son côté,
+   le premier effacerait le paramètre que le second n'a pas encore lu — l'un
+   des deux serait silencieusement perdu. On lit donc les DEUX en une passe,
+   on nettoie UNE fois, puis on applique. */
+function applyUrlParams() {
+  let licence = "", code = "";
+  try {
+    const p = new URLSearchParams(location.search);
+    licence = (p.get("licence") || "").trim().toUpperCase();
+    code    = (p.get("code")    || "").trim().toUpperCase();
+  } catch (e) { return; }
+  if (!licence && !code) return;
+  // URL propre : le code de licence ne doit apparaître ni dans la barre
+  // d'adresse ni dans l'historique, et ne doit pas se réappliquer au refresh.
+  try { history.replaceState(null, "", location.pathname + location.hash); } catch (e) { /* ignore */ }
+  if (licence) applyUrlLicence(licence);
+  if (code)    applyUrlCode(code);
+}
+
+/* LICENCE PAR LIEN (?licence=) — pensé pour la démo projetée : un QR code,
+   un scan, et l'enseignant essaie StageQuest sur son propre téléphone.
+
+   Même prudence que la saisie manuelle au clavier (submitAccessCode /
+   submitPremiumCode) : on passe par verifyLicenseCode(), donc par la fonction
+   security-definer `verifier_licence` côté Supabase. Si le serveur répond
+   « invalide », ou si on est hors-ligne / en erreur réseau, on ne pose RIEN.
+   Contrairement au code de classe (rattachement optimiste, sans enjeu), une
+   licence ouvre du contenu payant : on REFUSE plutôt que d'accepter à
+   l'aveugle. L'échec est silencieux — aucun message d'erreur : le lien est
+   fourni par Philippe, pas tapé par l'usager, et un lien périmé doit
+   simplement laisser l'app en mode gratuit. */
+async function applyUrlLicence(code) {
+  const result = await verifyLicenseCode(code);   // { ok } | { ok:false, reason }
+  if (!result.ok) return;                         // invalide, hors-ligne, ou SQL pas exécuté
+  state.accessCode = code;                        // déjà normalisé en MAJUSCULES
+  saveState();
+  // La licence peut porter l'option « carnet de stage » : il faut la demander
+  // au serveur MAINTENANT, sinon l'onglet 🦺 n'apparaîtrait qu'au prochain
+  // lancement (carnetDisponible() exige state.carnetOption).
+  if (typeof carnetRefreshOption === "function") await carnetRefreshOption();
+  render();
+}
+
+/* CODE DE CLASSE PAR LIEN (?code=) — rattache l'élève à sa cohorte
    automatiquement : validation + personnalisation via info_classe (cfpNom,
    cfpLogo, programme), sans qu'il ait à chercher l'icône « Ma classe ».
    IMPORTANT : on n'active PAS le partage (state.shared reste à sa valeur).
    Le partage demeure un choix explicite (Loi 25) et cela évite qu'une partie
-   de prospect pollue les données du tableau de bord démo. On nettoie l'URL
-   pour ne pas ré-appliquer en boucle au rafraîchissement. */
-function applyUrlCode() {
-  let code = "";
-  try { code = (new URLSearchParams(location.search).get("code") || "").trim().toUpperCase(); } catch (e) { return; }
+   de prospect pollue les données du tableau de bord démo.
+   Le code arrive déjà lu et normalisé par applyUrlParams(), et l'URL est déjà
+   nettoyée : cette fonction ne touche plus à l'historique. */
+function applyUrlCode(code) {
   if (!code) return;
-  // On retire ?code= tout de suite (URL propre, pas de ré-application au refresh).
-  try { history.replaceState(null, "", location.pathname + location.hash); } catch (e) { /* ignore */ }
   lookupClassInfo(code).then((info) => {
     if (info === "invalid") return;   // code invalide dans le lien : on ignore proprement
     // Valide, OU hors-ligne / échec réseau (info === null) : rattachement optimiste.
@@ -1912,7 +1960,7 @@ render();
 flushSync();   // vide une éventuelle file en attente d'un envoi précédent (progression + carnet)
 enregistrerLancement();   // statistiques d'usage : un lancement par session
 maybeBackfillCfp();   // récupère le nom du CFP si l'élève est déjà rattaché sans nom
-applyUrlCode();   // rattache l'élève automatiquement si un ?code= est présent dans le lien
+applyUrlParams();   // ?licence= pose la licence · ?code= rattache l'élève à sa classe
 
 /* Carnet de stage (module en option) — tout est no-op si carnet.js n'est pas
    chargé ou si le centre n'a pas l'option au contrat. */
