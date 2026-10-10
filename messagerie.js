@@ -296,11 +296,16 @@ function msgBanniereHTML() {
   </button>`;
 }
 
-/* Pastille sur le bouton 👥 « Ma classe » de l'en-tête : discrète, visible
-   depuis tous les onglets, sans ajouter de bouton sur un écran étroit. */
+/* Pastille sur le bouton 👥 « Ma classe » de l'en-tête : affiche le NOMBRE de
+   messages non lus (« 9+ » au-delà), visible depuis tous les onglets, sans
+   ajouter de bouton sur un écran étroit. */
 function msgPointHTML() {
-  if (!msgActif() || !msgNonLus().length) return "";
-  return `<span class="msg-point" aria-label="${msgFr() ? "Message non lu" : "Unread message"}"></span>`;
+  if (!msgActif()) return "";
+  const n = msgNonLus().length;
+  if (!n) return "";
+  const lib = msgFr() ? (n > 1 ? `${n} messages non lus` : "1 message non lu")
+                      : (n > 1 ? `${n} unread messages` : "1 unread message");
+  return `<span class="msg-point" aria-label="${lib}">${n > 9 ? "9+" : n}</span>`;
 }
 
 /* Bloc dans « Ma classe » : l'historique, ou l'explication s'il manque le partage. */
