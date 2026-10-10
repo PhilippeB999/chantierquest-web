@@ -161,6 +161,10 @@ function escapeHtml(str) {
 /* Le logo de CFP doit en plus être une vraie URL http(s) — sinon on
    l'ignore plutôt que de risquer un schéma javascript:/data: dans un src. */
 function safeImageUrl(url) {
+  // Sans logo (chaîne vide, null, undefined d'un ancien état) : AUCUNE image.
+  // Sans ce garde, new URL("", location.href) renvoie l'adresse de la page
+  // elle-même, qui passait le test http(s) et donnait une image cassée.
+  if (typeof url !== "string" || !url.trim()) return "";
   try {
     const u = new URL(url, location.href);
     return (u.protocol === "https:" || u.protocol === "http:") ? u.href : "";
@@ -655,6 +659,8 @@ function render() {
   recordLogin();
   if (!state.totem) {
     renderOnboarding();
+  } else if (typeof msgEcranOuvert !== "undefined" && msgEcranOuvert) {
+    renderMessagerie();   // messagerie.js — messages de l'enseignant
   } else if (showClassJoin) {
     renderClassJoin();
   } else if (typeof carnetView !== "undefined" && carnetView && typeof renderCarnet === "function" && carnetDisponible()) {
@@ -685,7 +691,7 @@ function header(activeTab) {
       </div>
     </div>
     <div class="topbar-actions">
-      <button class="reset-btn" onclick="goClassJoin()" title="${state.lang==='fr'?'Ma classe':'My class'}">👥</button>
+      <button class="reset-btn" onclick="goClassJoin()" title="${state.lang==='fr'?'Ma classe':'My class'}">👥<span data-msg-slot="point">${typeof msgPointHTML === "function" ? msgPointHTML() : ""}</span></button>
       <button class="lang-btn" onclick="toggleLang()">${t("switchLang")}</button>
       <button class="reset-btn" onclick="resetProgress()" title="${t('resetProgress')}">🔄</button>
     </div>
@@ -1099,6 +1105,7 @@ function joinClass() {
     saveState();
     if (state.shared) syncProgress();   // première remontée
     closeClassJoin();
+    if (typeof msgRelire === "function") msgRelire();   // messages de l'enseignant (si partage)
   });
 }
 
@@ -1257,6 +1264,7 @@ function renderClassJoin() {
         ${state.programme ? `<div class="cfp-prog">${escapeHtml(state.programme)}</div>` : ""}
       </div>
     </div>` : ""}
+    <div data-msg-slot="classe">${typeof msgClasseHTML === "function" ? msgClasseHTML() : ""}</div>
     <p class="welcome-intro">${fr
       ? "Ton enseignant t'a remis un code ? Saisis-le pour rejoindre ta classe. L'application fonctionne pareil avec ou sans."
       : "Got a code from your teacher? Enter it to join your class. The app works the same with or without."}</p>
@@ -1327,6 +1335,7 @@ function renderMap() {
 
   root.innerHTML = header("map") + `
     <div class="content">
+      <div data-msg-slot="banniere">${typeof msgBanniereHTML === "function" ? msgBanniereHTML() : ""}</div>
       <div class="vehicle-showcase">
         <div class="vehicle-frame">${vehicleSVG(state.vehicle, state.avatarColor, vh)}</div>
         <div class="vehicle-caption">${vName} · ${maxed ? t("maxSize") : t("vehicleGrows")}</div>
@@ -1961,6 +1970,7 @@ flushSync();   // vide une éventuelle file en attente d'un envoi précédent (p
 enregistrerLancement();   // statistiques d'usage : un lancement par session
 maybeBackfillCfp();   // récupère le nom du CFP si l'élève est déjà rattaché sans nom
 applyUrlParams();   // ?licence= pose la licence · ?code= rattache l'élève à sa classe
+if (typeof msgDemarrer === "function") msgDemarrer();   // messagerie.js : relecture des messages de l'enseignant
 
 /* Carnet de stage (module en option) — tout est no-op si carnet.js n'est pas
    chargé ou si le centre n'a pas l'option au contrat. */
